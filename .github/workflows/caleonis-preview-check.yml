@@ -1,0 +1,48 @@
+name: Caleonis pilot checks
+on:
+  push:
+    branches: [feat/creative-apps-v1]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: caleonis-pilot-checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser:
+    if: github.repository == 'PajuanDev/caleonis-marketing'
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser tools in isolated directory
+        run: |
+          mkdir -p /tmp/caleonis-browser
+          cd /tmp/caleonis-browser
+          npm init -y
+          npm install --no-audit --no-fund agent-browser@0.38.1
+          ./node_modules/.bin/agent-browser install --with-deps
+      - name: Inspect public login without credentials or mutations
+        run: |
+          set -eu
+          AB=/tmp/caleonis-browser/node_modules/.bin/agent-browser
+          mkdir -p /tmp/caleonis-check
+          trap '$AB close || true' EXIT
+          $AB open https://caleonis-marketing-production.up.railway.app/auth/login
+          $AB snapshot -i > /tmp/caleonis-check/snapshot.txt
+          $AB get text body > /tmp/caleonis-check/body.txt
+          $AB errors > /tmp/caleonis-check/errors.txt
+          $AB eval 'JSON.stringify({title:document.title,inputs:Array.from(document.querySelectorAll("input")).map(e=>({name:e.name,type:e.type})),ready:document.readyState})' > /tmp/caleonis-check/dom.json
+          $AB screenshot /tmp/caleonis-check/login.png
+          cat /tmp/caleonis-check/dom.json /tmp/caleonis-check/errors.txt /tmp/caleonis-check/body.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: caleonis-public-login-check
+          path: /tmp/caleonis-check
+          retention-days: 3
