@@ -1,0 +1,24 @@
+name: Caleonis source review
+on:
+  push:
+    branches: [feat/marketing-workspace-v1]
+    paths: ['.github/workflows/caleonis-source-review.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Archive tracked source only, without Git configuration or credentials
+        run: git archive --format=zip -o /tmp/caleonis-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: caleonis-source-review
+          path: /tmp/caleonis-source.zip
+          retention-days: 1
+          if-no-files-found: error
