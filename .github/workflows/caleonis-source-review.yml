@@ -15,10 +15,14 @@ jobs:
         with:
           persist-credentials: false
       - name: Archive tracked source only, without Git configuration or credentials
-        run: git archive --format=zip -o /tmp/caleonis-source.zip HEAD
+        run: |
+          git archive --format=zip -o /tmp/caleonis-source.zip HEAD
+          git rev-parse HEAD > /tmp/caleonis-source-commit.txt
       - uses: actions/upload-artifact@v4
         with:
           name: caleonis-source-review
-          path: /tmp/caleonis-source.zip
+          path: |
+            /tmp/caleonis-source.zip
+            /tmp/caleonis-source-commit.txt
           retention-days: 1
           if-no-files-found: error
