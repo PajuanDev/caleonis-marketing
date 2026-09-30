@@ -13,7 +13,14 @@ const nextConfig = {
     webpackMemoryOptimizations: true,
   },
   async headers() {
-    return [{ source: '/:path*', headers: [{ key: 'Document-Policy', value: 'js-profiling' }] }];
+    return [
+      { source: '/:path*', headers: [{ key: 'Document-Policy', value: 'js-profiling' }] },
+      { source: '/caleonis-studio/:path*', headers: [
+        { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; connect-src 'self'; font-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'" },
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'Referrer-Policy', value: 'same-origin' },
+      ] },
+    ];
   },
   reactStrictMode: false,
   transpilePackages: ['crypto-hash'],

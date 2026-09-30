@@ -1,0 +1,9 @@
+{
+  "name": "caleonis-studio-bundler",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
+}

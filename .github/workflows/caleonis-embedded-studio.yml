@@ -1,0 +1,101 @@
+name: Caleonis embedded upstream studio
+on:
+  push:
+    branches: [feat/marketing-workspace-v1]
+    paths: ['var/caleonis/upstream-studio/embedded/**', 'apps/frontend/src/caleonis/studio-channel.mjs', 'apps/frontend/src/caleonis/embedded-studio.component.tsx', 'apps/frontend/src/app/**/media/studio/**', '.github/workflows/caleonis-embedded-studio.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: embedded-studio-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  embedded:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22.20.0'}
+      - name: Test the keyless UI channel without provider calls
+        run: node --test var/caleonis/upstream-studio/embedded/channel.test.mjs
+      - name: Retrieve the original pinned studio and its own dependencies
+        run: |
+          git submodule update --init --depth 1 -- vendor/open-higgsfield
+          test "$(git -C vendor/open-higgsfield rev-parse HEAD)" = 1df1148e46d1b47d29e117b7bb1971a65c4286ee
+          cd vendor/open-higgsfield
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Compile original controls and galleries into the Caléonis frontend
+        run: |
+          npm install --prefix var/caleonis/upstream-studio/embedded --ignore-scripts --no-audit --no-fund
+          CALEONIS_STUDIO_BUILD_FIXTURE=isolated node var/caleonis/upstream-studio/embedded/build.mjs vendor/open-higgsfield /tmp/caleonis-embedded-assets
+      - name: Install isolated browser tooling
+        run: |
+          mkdir -p /tmp/caleonis-embedded-browser /tmp/caleonis-embedded-evidence
+          cd /tmp/caleonis-embedded-browser
+          npm init -y
+          npm install --no-audit --no-fund agent-browser@0.38.1
+          ./node_modules/.bin/agent-browser install --with-deps
+      - name: Inspect original UI, save and reopen a fixture project, verify closed generation
+        env:
+          CALEONIS_STUDIO_FIXTURE: isolated
+        run: |
+          set -euo pipefail
+          readonly AB=/tmp/caleonis-embedded-browser/node_modules/.bin/agent-browser
+          readonly OUT=/tmp/caleonis-embedded-evidence
+          node var/caleonis/upstream-studio/embedded/fixture.mjs /tmp/caleonis-embedded-assets > "$OUT/server.log" 2>&1 &
+          SERVER_PID=$!
+          trap '$AB close || true; kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4318/caleonis-studio/index.html -o /dev/null; then break; fi
+            sleep 1
+          done
+          $AB open http://127.0.0.1:4318/fixture-host.html
+          $AB wait 'iframe'
+          $AB frame 'iframe'
+          $AB wait 'textarea'
+          $AB snapshot -i > "$OUT/image-snapshot.txt"
+          $AB eval 'if (!document.querySelector("textarea")?.placeholder.includes("image")) throw new Error("Image composer missing"); if ([...document.querySelectorAll("button")].filter(b=>/Générer/.test(b.textContent)).some(b=>!b.disabled)) throw new Error("Generation unexpectedly active"); "image and disabled generation verified"'
+          $AB fill 'textarea' 'Campagne test : le produit doit rester fidèle à sa référence.'
+          $AB find role button click --name 'Enregistrer le brief' --exact
+          $AB wait --fn 'document.body.innerText.includes("Version 2 enregistrée")'
+          $AB screenshot "$OUT/image-studio.png"
+          $AB frame main
+          $AB reload
+          $AB wait 'iframe'
+          $AB frame 'iframe'
+          $AB wait 'textarea'
+          $AB eval 'if (!document.querySelector("textarea").value.includes("produit doit rester fidèle")) throw new Error("Saved brief not restored"); "saved brief restored"'
+          $AB snapshot -i > "$OUT/restored-snapshot.txt"
+          $AB find role button click --name 'Vidéo' --exact
+          $AB wait --fn 'document.querySelector("textarea")?.placeholder.includes("vidéo")'
+          $AB snapshot -i > "$OUT/video-snapshot.txt"
+          $AB screenshot "$OUT/video-studio.png"
+          $AB find role button click --name 'Médiathèque' --exact
+          $AB wait --fn 'document.body.innerText.includes("Référence produit — donnée de test")'
+          $AB screenshot "$OUT/shared-media.png"
+          $AB errors > "$OUT/browser-errors.txt"
+          $AB eval 'JSON.stringify({title:document.title,originalControls:true,realHostComponent:true,fixtureBackend:true,imageMode:true,videoMode:true,savedBriefRestored:true,sharedMediaOpened:true,generationRequests:performance.getEntriesByType("resource").filter(e=>/generate/.test(e.name)).length})' > "$OUT/report-raw.json"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('/tmp/caleonis-embedded-evidence')
+          report=json.loads(root.joinpath('report-raw.json').read_text())
+          if isinstance(report,str): report=json.loads(report)
+          assert report['generationRequests']==0
+          assert not root.joinpath('browser-errors.txt').read_text().strip()
+          report.update(productionModified=False,realProviderTest=False,userAcceptanceTest=False)
+          root.joinpath('report.json').write_text(json.dumps(report,indent=2,ensure_ascii=False))
+          print(json.dumps(report))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: caleonis-embedded-studio-evidence
+          path: |
+            /tmp/caleonis-embedded-evidence
+            /tmp/caleonis-embedded-assets/build-info.json
+          retention-days: 3
