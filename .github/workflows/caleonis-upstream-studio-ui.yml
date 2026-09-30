@@ -2,7 +2,7 @@ name: Caleonis upstream studio interface
 on:
   push:
     branches: [feat/marketing-workspace-v1]
-    paths: ['.github/workflows/caleonis-upstream-studio-ui.yml', 'vendor/open-higgsfield']
+    paths: ['.github/workflows/caleonis-upstream-studio-ui.yml', 'var/caleonis/upstream-studio/**', 'vendor/open-higgsfield']
   workflow_dispatch:
 permissions:
   contents: read
@@ -43,14 +43,12 @@ jobs:
           set -euo pipefail
           readonly AB=/tmp/caleonis-upstream-browser/node_modules/.bin/agent-browser
           readonly OUT=/tmp/caleonis-upstream-ui-evidence
-          cp -r public .next/standalone/public
-          mkdir -p .next/standalone/.next
-          cp -r .next/static .next/standalone/.next/static
-          HOSTNAME=127.0.0.1 PORT=4318 node .next/standalone/server.js > "$OUT/server.log" 2>&1 &
+          CALEONIS_UPSTREAM_PREVIEW=1 node "$GITHUB_WORKSPACE/var/caleonis/upstream-studio/start-standalone.mjs" "$PWD" > "$OUT/server.log" 2>&1 &
           SERVER_PID=$!
           trap '$AB close || true; kill "$SERVER_PID" 2>/dev/null || true' EXIT
           for i in $(seq 1 30); do
             if curl --fail --silent --max-time 5 http://127.0.0.1:4318/en -o "$OUT/page.html"; then break; fi
+            kill -0 "$SERVER_PID" || { cat "$OUT/server.log"; exit 1; }
             sleep 2
           done
           test -s "$OUT/page.html"
