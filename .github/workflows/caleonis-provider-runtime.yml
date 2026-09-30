@@ -1,0 +1,39 @@
+name: Caleonis upstream provider runtime
+on:
+  push:
+    branches: [feat/marketing-workspace-v1]
+    paths: ['var/caleonis/upstream-studio/provider/**', 'libraries/nestjs-libraries/src/caleonis/**', '.github/workflows/caleonis-provider-runtime.yml']
+  pull_request:
+    paths: ['var/caleonis/upstream-studio/provider/**', 'libraries/nestjs-libraries/src/caleonis/**']
+permissions:
+  contents: read
+concurrency:
+  group: provider-runtime-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  provider:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22.20.0'}
+      - name: Retrieve the pinned original adapters and build dependencies
+        run: |
+          git submodule update --init --depth 1 -- vendor/open-higgsfield
+          test "$(git -C vendor/open-higgsfield rev-parse HEAD)" = 1df1148e46d1b47d29e117b7bb1971a65c4286ee
+          npm ci --prefix vendor/open-higgsfield --ignore-scripts --no-audit --no-fund
+          npm install --prefix var/caleonis/upstream-studio/embedded --ignore-scripts --no-audit --no-fund
+      - name: Build original provider code as a server-only runtime
+        run: node var/caleonis/upstream-studio/provider/build.mjs vendor/open-higgsfield /tmp/caleonis-provider-runtime
+      - name: Exercise real upstream adapters using a simulated transport only
+        env:
+          CALEONIS_PROVIDER_TEST_BUNDLE: /tmp/caleonis-provider-runtime/upstream.cjs
+        run: node --test var/caleonis/upstream-studio/provider/provider.test.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: caleonis-provider-runtime-check
+          path: /tmp/caleonis-provider-runtime
+          retention-days: 2

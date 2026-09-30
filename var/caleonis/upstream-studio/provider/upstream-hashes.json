@@ -1,0 +1,8 @@
+{
+  "src/providers/freepik.ts": "0364516bdc115246fe69b7a28565a8fc3598bc41",
+  "src/models/adapters/base.ts": "c732a7314acf55bc9b4f83c6dbe26c52beb5e0c9",
+  "src/models/adapters/image/flux.ts": "5bef1563e0d09128d12ff7333cc9df1f252e5c09",
+  "src/models/adapters/video/ltx.ts": "e506b6482f4033fba58ef16a6d832b3aec6ca174",
+  "src/models/capabilities/image.ts": "4fd68a8a9afc9844873e6e4a7ad03cd6daa4b972",
+  "src/models/capabilities/video.ts": "0e94a4f21c2f02cacb2ebdd4e862f60125e00009"
+}
