@@ -1,0 +1,71 @@
+name: Caleonis complete upstream studio
+on:
+  push:
+    branches: [feat/marketing-workspace-v1]
+    paths: ['vendor/open-higgsfield', '.gitmodules', 'var/caleonis/upstream-studio/**', '.github/workflows/caleonis-upstream-studio.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: upstream-studio-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  original-studio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Retrieve the complete pinned upstream, not individual components
+        run: |
+          set -euo pipefail
+          git submodule update --init --depth 1 -- vendor/open-higgsfield
+          test "$(git -C vendor/open-higgsfield rev-parse HEAD)" = '1df1148e46d1b47d29e117b7bb1971a65c4286ee'
+          mkdir -p /tmp/caleonis-upstream-evidence
+          git -C vendor/open-higgsfield ls-files > /tmp/caleonis-upstream-evidence/source-files.txt
+          git -C vendor/open-higgsfield archive --format=zip HEAD > /tmp/caleonis-upstream-evidence/upstream-source.zip
+          git -C vendor/open-higgsfield rev-parse HEAD > /tmp/caleonis-upstream-evidence/upstream-commit.txt
+      - name: Install the upstream's own locked dependencies in isolation
+        working-directory: vendor/open-higgsfield
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Lint the complete upstream studio
+        working-directory: vendor/open-higgsfield
+        run: npm run lint
+      - name: Typecheck the complete upstream studio
+        working-directory: vendor/open-higgsfield
+        run: npm run typecheck
+      - name: Build the complete upstream application with no provider keys
+        working-directory: vendor/open-higgsfield
+        run: npm run build
+      - name: Inspect the real application on loopback only
+        working-directory: vendor/open-higgsfield
+        run: |
+          set -euo pipefail
+          npm run start -- --hostname 127.0.0.1 --port 4317 > /tmp/caleonis-upstream-evidence/server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent --max-time 5 http://127.0.0.1:4317/en -o /tmp/caleonis-upstream-evidence/studio.html; then break; fi
+            sleep 2
+          done
+          test -s /tmp/caleonis-upstream-evidence/studio.html
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          html = Path('/tmp/caleonis-upstream-evidence/studio.html').read_text()
+          assert '<html' in html and 'Open-Higgsfield' in html, 'Unexpected upstream response'
+          Path('/tmp/caleonis-upstream-evidence/http-check.json').write_text(json.dumps({'application':'complete upstream studio','upstream':'1df1148e46d1b47d29e117b7bb1971a65c4286ee','route':'/en','http':200,'provider_credentials':False,'paid_requests':False,'production_modified':False}))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: caleonis-complete-upstream-studio
+          path: /tmp/caleonis-upstream-evidence
+          retention-days: 2

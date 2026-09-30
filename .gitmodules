@@ -1,3 +1,7 @@
 [submodule "libraries/plugins/src/list/public-api"]
 	path = libraries/plugins/src/list/public-api
 	url = git@github.com:gitroomhq/public-api.git
+
+[submodule "vendor/open-higgsfield"]
+	path = vendor/open-higgsfield
+	url = https://github.com/TechBeme/open-higgsfield.git
