@@ -1,0 +1,92 @@
+name: Caleonis upstream studio interface
+on:
+  push:
+    branches: [feat/marketing-workspace-v1]
+    paths: ['.github/workflows/caleonis-upstream-studio-ui.yml', 'vendor/open-higgsfield']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: upstream-studio-ui-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - name: Retrieve the pinned complete studio
+        run: |
+          git submodule update --init --depth 1 -- vendor/open-higgsfield
+          test "$(git -C vendor/open-higgsfield rev-parse HEAD)" = '1df1148e46d1b47d29e117b7bb1971a65c4286ee'
+      - name: Build the original source with no provider credentials
+        working-directory: vendor/open-higgsfield
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+      - name: Install isolated browser tooling
+        run: |
+          mkdir -p /tmp/caleonis-upstream-browser /tmp/caleonis-upstream-ui-evidence
+          cd /tmp/caleonis-upstream-browser
+          npm init -y
+          npm install --no-audit --no-fund agent-browser@0.38.1
+          ./node_modules/.bin/agent-browser install --with-deps
+      - name: Verify the real image and video controls without generating
+        working-directory: vendor/open-higgsfield
+        run: |
+          set -euo pipefail
+          readonly AB=/tmp/caleonis-upstream-browser/node_modules/.bin/agent-browser
+          readonly OUT=/tmp/caleonis-upstream-ui-evidence
+          cp -r public .next/standalone/public
+          mkdir -p .next/standalone/.next
+          cp -r .next/static .next/standalone/.next/static
+          HOSTNAME=127.0.0.1 PORT=4318 node .next/standalone/server.js > "$OUT/server.log" 2>&1 &
+          SERVER_PID=$!
+          trap '$AB close || true; kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent --max-time 5 http://127.0.0.1:4318/en -o "$OUT/page.html"; then break; fi
+            sleep 2
+          done
+          test -s "$OUT/page.html"
+          $AB open http://127.0.0.1:4318/en
+          $AB wait --load networkidle
+          $AB snapshot -i > "$OUT/image-snapshot.txt"
+          $AB eval 'if (!document.querySelector("textarea")?.placeholder.toLowerCase().includes("image")) throw new Error("Image composer missing"); "image-composer-present"'
+          $AB screenshot "$OUT/image-studio.png"
+          $AB find role button click --name Video --exact
+          $AB snapshot -i > "$OUT/video-snapshot.txt"
+          $AB eval 'if (!document.querySelector("textarea")?.placeholder.toLowerCase().includes("video")) throw new Error("Video composer missing"); "video-composer-present"'
+          $AB screenshot "$OUT/video-studio.png"
+          $AB errors > "$OUT/browser-errors.txt"
+          $AB eval 'JSON.stringify({title:document.title, mode:"video", imageModeChecked:true, textarea:!!document.querySelector("textarea"), generationRequests:performance.getEntriesByType("resource").filter(e => /\/api\/generate/.test(e.name)).length})' > "$OUT/dom.json"
+          curl --fail --silent --show-error http://127.0.0.1:4318/api/image-models > "$OUT/image-catalog.json"
+          curl --fail --silent --show-error http://127.0.0.1:4318/api/models > "$OUT/video-catalog.json"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('/tmp/caleonis-upstream-ui-evidence')
+          dom=json.loads(root.joinpath('dom.json').read_text())
+          if isinstance(dom,str): dom=json.loads(dom)
+          assert dom['generationRequests']==0
+          assert dom['textarea'] and 'Open-Higgsfield' in dom['title']
+          errors=root.joinpath('browser-errors.txt').read_text().strip()
+          assert not errors, 'Browser reported JavaScript errors; inspect artifact'
+          image=json.loads(root.joinpath('image-catalog.json').read_text())['models']
+          video=json.loads(root.joinpath('video-catalog.json').read_text())['models']
+          assert len(image)>0 and len(video)>0
+          report={'upstream':'1df1148e46d1b47d29e117b7bb1971a65c4286ee','original_interface':True,'image_mode':True,'video_mode':True,'image_catalog_entries':len(image),'video_catalog_entries':len(video),'generation_requests':0,'provider_credentials_used':False,'production_modified':False,'user_acceptance_test':False}
+          root.joinpath('report.json').write_text(json.dumps(report,indent=2))
+          print(json.dumps(report))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: caleonis-upstream-studio-ui
+          path: /tmp/caleonis-upstream-ui-evidence
+          retention-days: 2
