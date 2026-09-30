@@ -6,6 +6,8 @@ Le fork principal reste soumis à sa licence AGPL-3.0 et aux notices amont.
 
 Le contrat de capacités dans `libraries/helpers/src/caleonis/upstream/model-capabilities.ts` est adapté de `TechBeme/open-higgsfield`, fichier `src/models/capabilities/types.ts`, blob `0d5a14bb35c2008fc2738dab6f32e223271bcd01`. Cette première reprise ne constitue pas l'import de toute son interface, de tous ses fournisseurs ou de ses modèles. Caléonis a réduit le contrat aux contrôles effectivement exposés ; l'authentification et la persistance relèvent de Caléonis.
 
+Le composant `apps/frontend/src/caleonis/studio/pill-popover.tsx` est adapté de `src/components/command-bar/PillPopover.tsx`, blob `d5fb4de683ffbb88bc1aff0528dff295be3dabc9`. Animation retirée, gestion du clavier et styles Caléonis ajoutés. Source : https://github.com/TechBeme/open-higgsfield
+
 MIT License
 
 Copyright (c) 2026 TechBe

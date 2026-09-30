@@ -18,7 +18,7 @@ jobs:
         with: {persist-credentials: false}
       - uses: actions/setup-node@v4
         with: {node-version: '22.20.0'}
-      - run: node --experimental-strip-types --test var/caleonis/workspace.test.mjs
+      - run: node --experimental-strip-types --test var/caleonis/workspace.test.mjs var/caleonis/native-image.test.mjs
   database:
     runs-on: ubuntu-latest
     timeout-minutes: 10

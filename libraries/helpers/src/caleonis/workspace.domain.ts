@@ -7,7 +7,7 @@ export class WorkspaceInputError extends Error {}
 const fields: Record<DocumentKind, Record<string, number>> = {
   brand: { activity: 2000, audience: 2000, tone: 1000, offers: 4000, guidelines: 4000, website: 500 },
   campaign: { objective: 2000, audience: 2000, offer: 2000, brief: 4000, cta: 500, brandId: 36 },
-  project: { prompt: 4000, mode: 10, aspectRatio: 10, resolution: 5, campaignId: 36, connectionId: 36 },
+  project: { prompt: 4000, mode: 10, aspectRatio: 10, resolution: 5, campaignId: 36, connectionId: 36, engine: 20, quality: 10 },
 };
 export function requireId(value: unknown): string {
   if (typeof value !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value)) throw new WorkspaceInputError('Identifiant invalide.');
@@ -45,6 +45,8 @@ export function validateDocument(body: unknown): DocumentInput {
     if (url.protocol !== 'https:' || url.username || url.password) throw new WorkspaceInputError('Utilisez une adresse HTTPS sans identifiants.');
   }
   if (kind === 'project') {
+    data.engine ||= data.connectionId ? 'higgsfield' : 'native'; data.quality ||= 'medium';
+    if (!['native', 'higgsfield'].includes(data.engine as string) || !['low', 'medium', 'high'].includes(data.quality as string)) throw new WorkspaceInputError('Moteur ou qualité invalide.');
     data.mode ||= 'image'; data.aspectRatio ||= '1:1'; data.resolution ||= '1k';
     if (!['image', 'video'].includes(data.mode as string) || !aspectRatios.includes(data.aspectRatio as any) || !['1k', '2k', '4k'].includes(data.resolution as string)) throw new WorkspaceInputError('Paramètres créatifs invalides.');
     const ids = raw.referenceIds ?? [];

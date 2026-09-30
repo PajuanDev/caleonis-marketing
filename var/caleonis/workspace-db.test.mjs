@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
@@ -38,3 +38,18 @@ test('quota reservations are atomic across distinct request ids',async()=>{
 });
 test('cross-organization project reference cannot reserve a generation',async()=>{await assert.rejects(()=>jobs.reserve(b,randomUUID(),doc.id,3,connection,{},2),StudioReservationError);});
 test('reapplying the additive migration preserves saved data and job ids',async()=>{await applyWorkspaceSchema(db);assert.equal((await docs.get(a,doc.id)).revision,3);assert.equal((await jobs.list(a,doc.id)).length,2);});
+test('native jobs are queued atomically and claimed once across competing workers',async()=>{
+  const id=randomUUID();await jobs.reserve(a,id,doc.id,3,'native:openai',{engine:'native',prompt:'fixture'},10,'queued');
+  assert.equal(await jobs.claimNative(b,id),undefined);
+  const claims=await Promise.all([jobs.claimNative(a,id),jobs.claimNative(a,id)]);assert.equal(claims.filter(Boolean).length,1);
+  await jobs.nativeFailure(a,id,'unknown');assert.equal(await jobs.claimNative(a,id),undefined);
+  const replay=await jobs.reserve(a,id,doc.id,3,'native:openai',{},0,'queued');assert.equal(replay.created,false);assert.equal(replay.run.status,'unknown');
+});
+test('native completion stores output and usage, and cannot be overwritten by late failure',async()=>{
+  const id=randomUUID();await jobs.reserve(a,id,doc.id,3,'native:openai',{},10,'queued');await jobs.claimNative(a,id);
+  await jobs.finishNative(a,id,'test-media-id','req_test',{total_tokens:42});await jobs.nativeFailure(a,id,'unknown');
+  const run=await jobs.get(a,id);assert.equal(run.status,'completed');assert.equal(run.mediaId,'test-media-id');assert.deepEqual(run.usage,{total_tokens:42});
+});
+test('native claimant cannot execute a Higgsfield reservation',async()=>{
+  const id=randomUUID();await jobs.reserve(a,id,doc.id,3,connection,{},10,'queued');assert.equal(await jobs.claimNative(a,id),undefined);
+});

@@ -1,0 +1,33 @@
+name: Caleonis studio preview
+on:
+  push:
+    branches: [feat/marketing-workspace-v1]
+    paths: ['apps/frontend/src/caleonis/studio/**', 'libraries/helpers/src/caleonis/**', 'var/caleonis/studio-preview/**', '.github/workflows/caleonis-studio-preview.yml']
+permissions:
+  contents: read
+concurrency:
+  group: studio-preview-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22.20.0'}
+      - name: Install isolated preview dependencies
+        run: |
+          mkdir -p /tmp/caleonis-preview-deps
+          cd /tmp/caleonis-preview-deps
+          npm init -y
+          npm install --no-audit --no-fund esbuild@0.25.12 react@19.2.4 react-dom@19.2.4 swr@2.4.1
+      - name: Bundle real studio component with fixture-only adapters
+        run: node var/caleonis/studio-preview/build.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: caleonis-studio-isolated-preview
+          path: studio-preview-dist/
+          retention-days: 2
+          if-no-files-found: error

@@ -1,0 +1,9 @@
+import {createRequire} from 'node:module';
+import {resolve,dirname} from 'node:path';
+import {mkdir,writeFile} from 'node:fs/promises';
+const require=createRequire(resolve(process.env.CALEONIS_PREVIEW_DEPS||'/tmp/caleonis-preview-deps','package.json'));
+const {build}=require('esbuild');
+const root=process.cwd(),mocks=resolve(root,'var/caleonis/studio-preview/mocks.tsx'),out=resolve(root,'studio-preview-dist');
+await mkdir(out,{recursive:true});
+await build({entryPoints:[resolve(root,'var/caleonis/studio-preview/entry.tsx')],bundle:true,outfile:resolve(out,'app.js'),nodePaths:[resolve(dirname(require.resolve('react/package.json')),'..')],jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'isolated-fixtures-only',setup(api){api.onResolve({filter:/^(next\/(link|image|navigation)|@gitroom\/helpers\/utils\/custom.fetch|@gitroom\/frontend\/components\/layout\/user.context)$/},args=>({path:args.path,namespace:'fixture'}));api.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:args.path==='next/link'?`export {Link as default} from ${JSON.stringify(mocks)};`:args.path==='next/image'?`export {Image as default} from ${JSON.stringify(mocks)};`:`export * from ${JSON.stringify(mocks)};`,loader:'tsx',resolveDir:root}));api.onResolve({filter:/^@gitroom\/helpers\//},args=>({path:resolve(root,args.path.replace('@gitroom/helpers/','libraries/helpers/src/')+'.ts')}));}}]});
+await writeFile(resolve(out,'index.html'),'<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Studio · fixture technique</title><link rel="stylesheet" href="/app.css"><style>body{margin:0;background:#121316;font-family:Arial,sans-serif}#root{min-height:100vh}</style><div id="root"></div><script src="/app.js"></script></html>');
