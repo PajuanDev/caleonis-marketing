@@ -19,7 +19,8 @@ if [[ "${STORAGE_PROVIDER:-local}" == 'local' ]]; then
   mkdir -p /uploads
   chmod 755 /uploads
 fi
-# Upstream uses db push. Never auto-accept data loss and never force-reset.
-# For later schema upgrades, back up first and introduce reviewed migrations.
+# Never auto-accept data loss, reset, or delete the upstream database.
 pnpm exec prisma db push --skip-generate --schema ./libraries/nestjs-libraries/src/database/prisma/schema.prisma
+# Reviewed additive migration in the separate caleonis schema.
+node /app/var/caleonis/workspace-schema.mjs
 exec pm2-runtime start /app/var/caleonis/ecosystem.config.cjs

@@ -42,10 +42,7 @@ import { NoAuthIntegrationsController } from '@gitroom/backend/api/routes/no.aut
 import { EnterpriseController } from '@gitroom/backend/api/routes/enterprise.controller';
 import { OAuthAppController } from '@gitroom/backend/api/routes/oauth-app.controller';
 import { ApprovedAppsController } from '@gitroom/backend/api/routes/approved-apps.controller';
-import {
-  OAuthController,
-  OAuthAuthorizedController,
-} from '@gitroom/backend/api/routes/oauth.controller';
+import { OAuthController, OAuthAuthorizedController } from '@gitroom/backend/api/routes/oauth.controller';
 import { AnnouncementsController } from '@gitroom/backend/api/routes/announcements.controller';
 import { AdminController } from '@gitroom/backend/api/routes/admin.controller';
 import { AuthProviderManager } from '@gitroom/backend/services/auth/providers/providers.manager';
@@ -56,86 +53,38 @@ import { FarcasterProvider } from '@gitroom/backend/services/auth/providers/farc
 import { WalletProvider } from '@gitroom/backend/services/auth/providers/wallet.provider';
 import { OauthProvider } from '@gitroom/backend/services/auth/providers/oauth.provider';
 import { StripeController } from '@gitroom/backend/api/routes/stripe.controller';
-
+import { WorkspaceController } from '@gitroom/backend/api/routes/workspace.controller';
+import { CaleonisStudioService } from '@gitroom/nestjs-libraries/caleonis/studio.service';
 const authenticatedController = [
-  UsersController,
-  AnalyticsController,
-  IntegrationsController,
-  SettingsController,
-  PostsController,
-  MediaController,
-  ClippingController,
-  BillingController,
-  NotificationsController,
-  CopilotController,
-  WebhookController,
-  SignatureController,
-  AutopostController,
-  SetsController,
-  ThirdPartyController,
-  OAuthAppController,
-  ApprovedAppsController,
-  OAuthAuthorizedController,
-  AnnouncementsController,
-  AdminController,
+  UsersController, AnalyticsController, IntegrationsController, SettingsController,
+  PostsController, MediaController, ClippingController, BillingController,
+  NotificationsController, CopilotController, WebhookController, SignatureController,
+  AutopostController, SetsController, ThirdPartyController, OAuthAppController,
+  ApprovedAppsController, OAuthAuthorizedController, AnnouncementsController,
+  AdminController, WorkspaceController,
 ];
 @Module({
   imports: [UploadModule],
   controllers: process.env.MCP_ONLY
-    ? [
-        RootController,
-        OAuthController,
-        MediaWidgetController,
-        ClippingWidgetController,
-      ]
-    : [
-        RootController,
-        PaymentController,
-        StripeController,
-        AuthController,
-        PublicController,
-        MonitorController,
-        EnterpriseController,
-        NoAuthIntegrationsController,
-        OAuthController,
-        MediaWidgetController,
-        ClippingWidgetController,
-        ...authenticatedController,
-      ],
+    ? [RootController, OAuthController, MediaWidgetController, ClippingWidgetController]
+    : [RootController, PaymentController, StripeController, AuthController,
+       PublicController, MonitorController, EnterpriseController,
+       NoAuthIntegrationsController, OAuthController, MediaWidgetController,
+       ClippingWidgetController, ...authenticatedController],
   providers: [
-    AuthService,
-    StripeService,
-    PaymentService,
-    PaymentProviderManager,
-    RevenueCatProvider,
-    OpenaiService,
-    ExtractContentService,
-    AuthMiddleware,
-    UploadWidgetAuthMiddleware,
-    PoliciesGuard,
-    PermissionsService,
-    CodesService,
-    IntegrationManager,
-    TrackService,
-    ShortLinkService,
-    AuthProviderManager,
-    GithubProvider,
-    GoogleProvider,
-    AppleProvider,
-    FarcasterProvider,
-    WalletProvider,
-    OauthProvider,
+    AuthService, StripeService, PaymentService, PaymentProviderManager,
+    RevenueCatProvider, OpenaiService, ExtractContentService, AuthMiddleware,
+    UploadWidgetAuthMiddleware, PoliciesGuard, PermissionsService, CodesService,
+    IntegrationManager, TrackService, ShortLinkService, AuthProviderManager,
+    GithubProvider, GoogleProvider, AppleProvider, FarcasterProvider,
+    WalletProvider, OauthProvider, CaleonisStudioService,
   ],
-  get exports() {
-    return [...this.imports, ...this.providers];
-  },
+  get exports() { return [...this.imports, ...this.providers]; },
 })
 export class ApiModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(AuthMiddleware).forRoutes(...authenticatedController);
     consumer.apply(UploadWidgetAuthMiddleware).forRoutes(MediaWidgetController);
-    consumer
-      .apply(ClippingWidgetAuthMiddleware)
-      .forRoutes(ClippingWidgetController);
+    consumer.apply(ClippingWidgetAuthMiddleware).forRoutes(ClippingWidgetController);
   }
 }
