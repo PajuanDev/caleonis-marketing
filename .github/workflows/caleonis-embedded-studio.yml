@@ -32,6 +32,8 @@ jobs:
         run: |
           npm install --prefix var/caleonis/upstream-studio/embedded --ignore-scripts --no-audit --no-fund
           CALEONIS_STUDIO_BUILD_FIXTURE=isolated node var/caleonis/upstream-studio/embedded/build.mjs vendor/open-higgsfield /tmp/caleonis-embedded-assets
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
       - name: Install isolated browser tooling
         run: |
           mkdir -p /tmp/caleonis-embedded-browser /tmp/caleonis-embedded-evidence
@@ -48,25 +50,38 @@ jobs:
           readonly OUT=/tmp/caleonis-embedded-evidence
           node var/caleonis/upstream-studio/embedded/fixture.mjs /tmp/caleonis-embedded-assets > "$OUT/server.log" 2>&1 &
           SERVER_PID=$!
-          trap '$AB close || true; kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          finish() {
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              $AB screenshot "$OUT/failure.png" || true
+              $AB snapshot -i > "$OUT/failure-snapshot.txt" || true
+              $AB errors > "$OUT/failure-errors.txt" || true
+              $AB eval 'JSON.stringify({body:document.body.innerText,frame:document.querySelector("iframe")?.contentDocument?.body.innerText})' > "$OUT/failure-dom.json" || true
+            fi
+            $AB close || true
+            kill "$SERVER_PID" 2>/dev/null || true
+            exit "$rc"
+          }
+          trap finish EXIT
           for i in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:4318/caleonis-studio/index.html -o /dev/null; then break; fi
             sleep 1
           done
           $AB open http://127.0.0.1:4318/fixture-host.html
-          $AB wait 'iframe'
-          $AB frame 'iframe'
+          $AB wait --fn '!!document.querySelector("iframe")?.contentDocument?.querySelector("textarea")'
+          $AB snapshot -i > "$OUT/host-snapshot.txt"
+          $AB frame 'http://127.0.0.1:4318/caleonis-studio/index.html'
           $AB wait 'textarea'
           $AB snapshot -i > "$OUT/image-snapshot.txt"
-          $AB eval 'if (!document.querySelector("textarea")?.placeholder.includes("image")) throw new Error("Image composer missing"); if ([...document.querySelectorAll("button")].filter(b=>/Générer/.test(b.textContent)).some(b=>!b.disabled)) throw new Error("Generation unexpectedly active"); "image and disabled generation verified"'
+          $AB eval 'if (!document.querySelector("textarea")?.placeholder.includes("image")) throw new Error("Image composer missing"); const buttons=[...document.querySelectorAll("button")].filter(b=>/Générer/.test(b.textContent)); if (!buttons.length || buttons.some(b=>!b.disabled)) throw new Error("Generation unexpectedly active or absent"); "image and disabled generation verified"'
           $AB fill 'textarea' 'Campagne test : le produit doit rester fidèle à sa référence.'
           $AB find role button click --name 'Enregistrer le brief' --exact
           $AB wait --fn 'document.body.innerText.includes("Version 2 enregistrée")'
           $AB screenshot "$OUT/image-studio.png"
           $AB frame main
           $AB reload
-          $AB wait 'iframe'
-          $AB frame 'iframe'
+          $AB wait --fn '!!document.querySelector("iframe")?.contentDocument?.querySelector("textarea")'
+          $AB frame 'http://127.0.0.1:4318/caleonis-studio/index.html'
           $AB wait 'textarea'
           $AB eval 'if (!document.querySelector("textarea").value.includes("produit doit rester fidèle")) throw new Error("Saved brief not restored"); "saved brief restored"'
           $AB snapshot -i > "$OUT/restored-snapshot.txt"
