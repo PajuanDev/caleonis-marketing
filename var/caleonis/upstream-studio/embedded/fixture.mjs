@@ -2,7 +2,7 @@
 import http from 'node:http';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
-if(process.env.CALEONIS_STUDIO_FIXTURE!=='isolated' || ['DATABASE_URL','JWT_SECRET','OPENAI_API_KEY','FREEPIK_API_KEY','GEMINI_API_KEY','AI_GATEWAY_API_KEY'].some(key=>process.env[key]))throw new Error('Fixture requires isolation and no production credentials');
+if(process.env.CALEONIS_STUDIO_FIXTURE!=='isolated' || ['DATABASE_URL','JWT_SECRET','OPENAI_API_KEY','MAGNIFIC_API_KEY','FREEPIK_API_KEY','GEMINI_API_KEY','AI_GATEWAY_API_KEY'].some(key=>process.env[key]))throw new Error('Fixture requires isolation and no production credentials');
 const root=path.resolve(process.argv[2]);
 const projectId='11111111-1111-4111-8111-111111111111';
 let project={id:projectId,kind:'project',title:'Lancement produit — démonstration technique',revision:1,data:{prompt:'',mode:'image',referenceIds:[],campaignId:'',connectionId:'',engine:'native',quality:'medium'}};
@@ -21,6 +21,7 @@ const server=http.createServer(async(req,res)=>{
     res.end(JSON.stringify(project));return;
    }
    if(endpoint===`/workspace/projects/${projectId}/runs`){res.end('[]');return;}
+   if(endpoint==='/workspace/studio-capabilities'){res.end(JSON.stringify({upstream:{enabled:false,provider:'Magnific',models:[]}}));return;}
    if(endpoint==='/workspace/media'){res.end(JSON.stringify([{id:'22222222-2222-4222-8222-222222222222',name:'Référence produit — donnée de test',path:'/fixture-product.svg',type:'image'}]));return;}
    res.writeHead(404);res.end('{}');return;
   }

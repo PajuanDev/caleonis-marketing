@@ -33,6 +33,8 @@ export const statements = [
   `CREATE INDEX IF NOT EXISTS studio_runs_project ON caleonis.studio_runs ("organizationId","projectId","createdAt" DESC)`,
   `CREATE TABLE IF NOT EXISTS caleonis.schema_migrations (version TEXT PRIMARY KEY, "appliedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
   `ALTER TABLE caleonis.studio_runs ADD COLUMN IF NOT EXISTS usage JSONB`,
+  `ALTER TABLE caleonis.studio_runs ADD COLUMN IF NOT EXISTS "providerState" JSONB NOT NULL DEFAULT '{}'::jsonb`,
+  `INSERT INTO caleonis.schema_migrations(version) VALUES ('003-upstream-provider-state') ON CONFLICT DO NOTHING`,
   `INSERT INTO caleonis.schema_migrations(version) VALUES ('002-native-image-usage') ON CONFLICT DO NOTHING`,
   `INSERT INTO caleonis.schema_migrations(version) VALUES ('001-workspace-documents-and-runs') ON CONFLICT DO NOTHING`,
 ];
@@ -45,7 +47,7 @@ export async function applyWorkspaceSchema(db) {
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const db = new PrismaClient();
-  try { await applyWorkspaceSchema(db); console.log('Caléonis workspace schema ready (002).'); }
+  try { await applyWorkspaceSchema(db); console.log('Caléonis workspace schema ready (003).'); }
   catch { console.error('Caléonis workspace migration failed. Startup stopped; no destructive migration attempted.'); process.exitCode = 1; }
   finally { await db.$disconnect(); }
 }

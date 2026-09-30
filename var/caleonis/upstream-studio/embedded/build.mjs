@@ -31,7 +31,7 @@ await rm(work, { recursive: true, force: true });
 await mkdir(work, { recursive: true });
 await cp(path.join(source, 'src'), path.join(work, 'src'), { recursive: true });
 await mkdir(path.join(work, 'src/caleonis'), { recursive: true });
-for (const file of ['client.ts', 'entry.tsx']) await cp(path.join(here, file), path.join(work, 'src/caleonis', file));
+for (const file of ['client.ts', 'entry.tsx', 'GenerationControls.tsx']) await cp(path.join(here, file), path.join(work, 'src/caleonis', file));
 await cp(path.join(here, 'StudioShell.tsx'), path.join(work, 'src/components/studio/StudioShell.tsx'));
 const english = JSON.parse(await readFile(path.join(source, 'src/messages/en.json'), 'utf8'));
 const french = JSON.parse(await readFile(path.join(here, 'fr.json'), 'utf8'));
@@ -44,8 +44,8 @@ function once(text, needle, replacement) {
 }
 const commandPath = path.join(work, 'src/components/command-bar/CommandBar.tsx');
 let command = await readFile(commandPath, 'utf8');
-command = once(command, 'interface CommandBarProps {', `import type { StudioDraft } from '@/caleonis/client';\n\ninterface CommandBarProps {\n    initialDraft?: StudioDraft;\n    initialPrompt?: string;\n    onDraftChange?: (draft: StudioDraft, localFiles: boolean) => void;\n    generationEnabled?: boolean;`);
-command = once(command, 'export function CommandBar({ mode, onModeChange }: CommandBarProps)', 'export function CommandBar({ mode, onModeChange, initialDraft, initialPrompt, onDraftChange, generationEnabled = false }: CommandBarProps)');
+command = once(command, 'interface CommandBarProps {', `import type { StudioDraft } from '@/caleonis/client';\n\ninterface CommandBarProps {\n    initialDraft?: StudioDraft;\n    initialPrompt?: string;\n    onDraftChange?: (draft: StudioDraft, localFiles: boolean) => void;\n    generationEnabled?: boolean;\n    onGenerate?: () => void;`);
+command = once(command, 'export function CommandBar({ mode, onModeChange }: CommandBarProps)', 'export function CommandBar({ mode, onModeChange, initialDraft, initialPrompt, onDraftChange, generationEnabled = false, onGenerate }: CommandBarProps)');
 command = once(command, 'Object.keys(VIDEO_CAPABILITIES)[0]', '(initialDraft?.videoModelId && VIDEO_CAPABILITIES[initialDraft.videoModelId] ? initialDraft.videoModelId : Object.keys(VIDEO_CAPABILITIES)[0])');
 command = once(command, 'Object.keys(IMAGE_CAPABILITIES)[0]', '(initialDraft?.imageModelId && IMAGE_CAPABILITIES[initialDraft.imageModelId] ? initialDraft.imageModelId : Object.keys(IMAGE_CAPABILITIES)[0])');
 command = once(command, 'useState("");\n    const [videoSettings', 'useState(initialDraft?.videoVariantId || "");\n    const [videoSettings');
@@ -55,10 +55,13 @@ command = once(command, 'const [sizeResolution, setSizeResolution] = useState(()
 command = once(command, 'useState<Record<string, unknown>>({})', 'useState<Record<string, unknown>>(initialDraft?.imageFieldValues || {})');
 command = once(command, 'defaultValues: { prompt: "" }', 'defaultValues: { prompt: initialDraft?.prompt ?? initialPrompt ?? "" }');
 command = once(command, 'const textareaRef = useRef<HTMLTextAreaElement>(null);', `useEffect(() => {\n        onDraftChange?.({schemaVersion: 1, mode, prompt, imageModelId, videoModelId, videoVariantId, sizeAspect, sizeResolution, imageFieldValues, videoSettings: {...videoSettings}}, attachments.length > 0 || Object.values(slotFiles).some(files => files.length > 0));\n    }, [mode, prompt, imageModelId, videoModelId, videoVariantId, sizeAspect, sizeResolution, imageFieldValues, videoSettings, attachments, slotFiles, onDraftChange]);\n    const textareaRef = useRef<HTMLTextAreaElement>(null);`);
-command = once(command, 'const onSubmit = async (data: FormData) => {', 'const onSubmit = async (data: FormData) => {\n        if (!generationEnabled) { setApiError("CALEONIS_NOT_READY"); return; }');
-command = once(command, 'type="submit"', 'type="submit" disabled={!generationEnabled} title="Moteurs non raccordés : aucune génération payante"');
+command = once(command, 'const onSubmit = async (data: FormData) => {', 'const onSubmit = async (data: FormData) => {\n        if (!generationEnabled) { setApiError("CALEONIS_NOT_READY"); return; }\n        if (onGenerate) { onGenerate(); return; }');
+command = once(command, 'type="submit"', 'type="submit" disabled={!generationEnabled} title={generationEnabled ? "Vérifier et confirmer la création" : "Vérifiez le modèle, la configuration et la sauvegarde du projet"}');
 command = once(command, 'className="shrink-0 self-center border-none', 'className="disabled:opacity-40 disabled:cursor-not-allowed shrink-0 self-center border-none');
 await writeFile(commandPath, command);
+const imageCapsPath=path.join(work,'src/models/capabilities/image.ts');
+const imageCaps=await readFile(imageCapsPath,'utf8');
+await writeFile(imageCapsPath,imageCaps.split('\n').filter(line=>!line.includes('id: "enable_safety_checker"')).join('\n'));
 
 // Keep the original gallery; destructive controls are not exposed until semantics match.
 const resultsPath = path.join(work, 'src/components/tasks/ResultsGrid.tsx');

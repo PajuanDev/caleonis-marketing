@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-export type StudioRun = { id: string; organizationId: string; projectId: string; projectRevision: number; connectionId: string; status: string; snapshot: Record<string, any>; requestId: string | null; mediaId: string | null; createdAt: Date; updatedAt: Date; usage?: Record<string, number> };
+export type StudioRun = { id: string; organizationId: string; projectId: string; projectRevision: number; connectionId: string; status: string; snapshot: Record<string, any>; requestId: string | null; mediaId: string | null; createdAt: Date; updatedAt: Date; usage?: Record<string, number>; providerState?: Record<string, any> };
 export class StudioReservationError extends Error {}
 export function createStudioRepository(db: PrismaClient) {
   return {
@@ -20,6 +20,10 @@ export function createStudioRepository(db: PrismaClient) {
         }
         const current = await tx.$queryRaw<Array<{ revision: number }>>`SELECT revision FROM caleonis.documents WHERE "organizationId"=${org} AND id=${project} AND kind='project' FOR UPDATE`;
         if (!current.length || current[0].revision !== revision) throw new StudioReservationError('Sauvegardez puis rechargez la version courante avant de générer.');
+        if (connection.startsWith('native:magnific:')) {
+          const active = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM caleonis.studio_runs WHERE "organizationId"=${org} AND "projectId"=${project} AND "connectionId" LIKE 'native:magnific:%' AND status IN ('submitting','queued','in_progress','unknown') LIMIT 1`;
+          if (active.length) throw new StudioReservationError('Une création est en cours ou doit être vérifiée chez le fournisseur. Aucun nouvel achat.');
+        }
         const count = await tx.$queryRaw<Array<{ total: number }>>`SELECT COUNT(*)::int AS total FROM caleonis.studio_runs WHERE "organizationId"=${org} AND "createdAt">NOW()-INTERVAL '24 hours'`;
         if (limit < 1 || count[0].total >= limit) throw new StudioReservationError('Plafond de créations atteint ou non configuré.');
         const rows = await tx.$queryRaw<StudioRun[]>`INSERT INTO caleonis.studio_runs (id,"organizationId","projectId","projectRevision","connectionId",snapshot,status) VALUES (${id},${org},${project},${revision},${connection},${JSON.stringify(snapshot)}::jsonb,${initialStatus}) RETURNING *`;
@@ -38,6 +42,20 @@ export function createStudioRepository(db: PrismaClient) {
     },
     async nativeFailure(org: string, id: string, status: 'failed' | 'unknown') {
       await db.$executeRaw`UPDATE caleonis.studio_runs SET status=${status},"updatedAt"=NOW() WHERE "organizationId"=${org} AND id=${id} AND "connectionId"='native:openai' AND status IN ('queued','in_progress') AND "mediaId" IS NULL`;
+    },
+    async providerAccepted(org: string, id: string, requestId: string, operation: unknown) {
+      await db.$executeRaw`UPDATE caleonis.studio_runs SET status='queued',"requestId"=${requestId},"providerState"=jsonb_build_object('operation',${JSON.stringify(operation)}::jsonb),"updatedAt"=NOW() WHERE "organizationId"=${org} AND id=${id} AND status='submitting' AND "connectionId" LIKE 'native:magnific:%'`;
+    },
+    async providerResult(org: string, id: string, status: string, state: unknown) {
+      // A delayed poll cannot regress a completed/imported result.
+      await db.$executeRaw`UPDATE caleonis.studio_runs SET status=${status},"providerState"="providerState" || ${JSON.stringify(state)}::jsonb,"updatedAt"=NOW() WHERE "organizationId"=${org} AND id=${id} AND status IN ('queued','in_progress') AND "mediaId" IS NULL AND "connectionId" LIKE 'native:magnific:%'`;
+    },
+    async claimProviderImport(org: string, id: string) {
+      const rows = await db.$queryRaw<StudioRun[]>`UPDATE caleonis.studio_runs SET "providerState"="providerState" || '{"importState":"importing"}'::jsonb,"updatedAt"=NOW() WHERE "organizationId"=${org} AND id=${id} AND status='completed' AND "mediaId" IS NULL AND "connectionId" LIKE 'native:magnific:%' AND NOT ("providerState" ? 'importState') RETURNING *`;
+      return rows[0];
+    },
+    async providerImportUncertain(org: string, id: string) {
+      await db.$executeRaw`UPDATE caleonis.studio_runs SET "providerState"="providerState" || '{"importState":"unknown"}'::jsonb,"updatedAt"=NOW() WHERE "organizationId"=${org} AND id=${id} AND "mediaId" IS NULL AND "providerState"->>'importState'='importing'`;
     },
     async imported(org: string, id: string, mediaId: string) {
       await db.$executeRaw`UPDATE caleonis.studio_runs SET status='completed',"mediaId"=${mediaId},"updatedAt"=NOW() WHERE "organizationId"=${org} AND id=${id}`;

@@ -1,7 +1,7 @@
 /** Keyless UI channel. The Caléonis API remains the authorization boundary. */
 export const STUDIO_CHANNEL = 'caleonis-studio-v1';
 const idPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
-const operations = ['project', 'saveBrief', 'saveDraft', 'media', 'images', 'videos'];
+const operations = ['project', 'saveBrief', 'saveDraft', 'media', 'images', 'videos', 'runs', 'start', 'sync', 'import'];
 export function isStudioMessage(event, frameWindow, origin) {
   const data = event.data;
   return Boolean(frameWindow && event.source === frameWindow && event.origin === origin && data && data.channel === STUDIO_CHANNEL && data.type === 'request' && typeof data.id === 'string' && idPattern.test(data.id) && operations.includes(data.operation));
@@ -29,7 +29,8 @@ export async function handleStudioOperation(projectId, operation, payload, callA
       const linked = await callApi(`/workspace/documents/${project.data.campaignId}`);
       if (linked.kind === 'campaign') campaign = {title:linked.title};
     }
-    return {project, campaign, generationEnabled:false};
+    const capabilities=await callApi('/workspace/studio-capabilities');
+    return {project,campaign,generationEnabled:capabilities?.upstream?.enabled===true,upstream:capabilities?.upstream||null};
   }
   if (isSave) {
     if (brief.revision !== project.revision) throw new Error('Une version plus récente existe. Rouvrez le projet avant de sauvegarder.');
@@ -42,12 +43,21 @@ export async function handleStudioOperation(projectId, operation, payload, callA
     if (!Array.isArray(files)) throw new Error('Médiathèque indisponible.');
     return files.map(item=>({id:item.id,name:item.name,path:item.path,type:item.type}));
   }
+  if(operation==='start') {
+    if(!payload||Object.keys(payload).some(k=>!['revision','clientRequestId','confirmPaidGeneration'].includes(k))||!Number.isSafeInteger(payload.revision)||payload.revision!==project.revision||!idPattern.test(payload.clientRequestId||'')||payload.confirmPaidGeneration!==true)throw new Error('Confirmation de génération invalide.');
+    return callApi(`/workspace/projects/${projectId}/runs`,{method:'POST',body:JSON.stringify({...payload,source:'open-higgsfield-v1'})});
+  }
+  if(operation==='sync'||operation==='import') {
+    if(!payload||Object.keys(payload).length!==1||!idPattern.test(payload.runId||''))throw new Error('Identifiant de création invalide.');
+    return callApi(`/workspace/projects/${projectId}/runs/${payload.runId}/${operation}`,{method:'POST'});
+  }
   const runs = await callApi(`/workspace/projects/${projectId}/runs`);
   if (!Array.isArray(runs)) throw new Error('Historique indisponible.');
+  if(operation==='runs')return runs;
   const type = operation === 'images' ? 'image' : 'video';
   return runs.filter(run=>run.media && (run.snapshot?.mode || 'image')===type).map(run=>({
     task_id:run.id,status:'COMPLETED',_done:true,media_type:type,
-    model_id:run.snapshot?.engine==='higgsfield'?'Higgsfield':'Caléonis',
+    model_id:run.snapshot?.modelId||(run.snapshot?.engine==='higgsfield'?'Higgsfield':'Caléonis'),
     prompt:run.snapshot?.prompt||'',created_at:run.createdAt,
     result_urls:[run.media.path],...(type==='video'?{video_urls:[run.media.path]}:{}),
   }));

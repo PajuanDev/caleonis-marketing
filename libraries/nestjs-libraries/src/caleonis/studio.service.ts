@@ -1,3 +1,4 @@
+import { UpstreamStudioService, upstreamConfiguration } from './upstream-studio.service';
 import { HttpException, Injectable } from '@nestjs/common';
 import { PrismaService } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
 import { ThirdPartyManager } from '@gitroom/nestjs-libraries/3rdparties/thirdparty.manager';
@@ -16,6 +17,8 @@ export class CaleonisStudioService {
     const raw = process.env.CALEONIS_CREATIVE_DAILY_LIMIT || '0';
     return /^\d{1,3}$/.test(raw) ? Math.min(100, Number(raw)) : 0;
   }
+  private upstream() { return new UpstreamStudioService(this.db, this.media, this.dailyLimit()); }
+  capabilities() { return { dailyLimit:this.dailyLimit(), imageAdapter:'higgsfield', videoGeneration:false, referenceGeneration:false, upstream:upstreamConfiguration(this.dailyLimit()) }; }
   private async connection(org: string, id: string) {
     const saved = await this.thirdParties.getIntegrationById(org, id);
     const provider = saved?.identifier === 'higgsfield' ? this.thirdParties.getThirdPartyByName('higgsfield') : undefined;
@@ -23,6 +26,7 @@ export class CaleonisStudioService {
     return { apiKey: AuthService.fixedDecryption(saved.apiKey), provider: provider.instance as HiggsfieldProvider, __scope: `${org}:${id}` };
   }
   private async visible(run: StudioRun) {
+    if(run.connectionId.startsWith('native:magnific:'))return this.upstream().visible(run);
     const media = run.mediaId ? await this.db.media.findFirst({ where: { id: run.mediaId, organizationId: run.organizationId, deletedAt: null }, select: { id: true, path: true, name: true } }) : null;
     return { id: run.id, status: run.status, projectRevision: run.projectRevision, requestId: run.requestId, createdAt: run.createdAt, media, snapshot: run.snapshot };
   }
@@ -31,6 +35,8 @@ export class CaleonisStudioService {
     return Promise.all((await createStudioRepository(this.db).list(org, project)).map(run => this.visible(run)));
   }
   async start(org: string, project: string, body: any) {
+    if(body?.source==='open-higgsfield-v1')return this.upstream().start(org,project,body);
+    if(body?.source)throw new HttpException('Source de génération inconnue.',400);
     const id = requireId(body?.clientRequestId); const revision = requireRevision(body?.revision);
     if (body?.confirmPaidGeneration !== true) throw new HttpException('Confirmez explicitement la génération payante.', 400);
     const document = await createWorkspaceRepository(this.db).get(org, requireId(project));
@@ -61,6 +67,7 @@ export class CaleonisStudioService {
     const repository = createStudioRepository(this.db);
     const run = await repository.get(org, requireId(id));
     if (!run || run.projectId !== requireId(project)) throw new HttpException('Création introuvable.', 404);
+    if(run.connectionId.startsWith('native:magnific:'))return this.upstream().sync(org,project,id);
     if (run.mediaId || terminal.includes(run.status)) return this.visible(run);
     const connection = await this.connection(org, run.connectionId);
     try {
@@ -70,6 +77,8 @@ export class CaleonisStudioService {
     return this.visible((await repository.get(org, id))!);
   }
   async import(org: string, project: string, id: string) {
+    const existing=await createStudioRepository(this.db).get(org,requireId(id));
+    if(existing?.connectionId.startsWith('native:magnific:'))return this.upstream().import(org,project,id);
     await this.sync(org, project, id);
     const repository = createStudioRepository(this.db); const run = (await repository.get(org, id))!;
     if (run.mediaId) return this.visible(run);

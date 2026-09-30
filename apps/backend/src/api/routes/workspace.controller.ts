@@ -61,7 +61,7 @@ export class WorkspaceController {
     });
   }
   @Get('/studio-capabilities')
-  capabilities() { return { dailyLimit: this.studio.dailyLimit(), imageAdapter: 'higgsfield', videoGeneration: false, referenceGeneration: false }; }
+  capabilities() { return this.studio.capabilities(); }
   @Get('/projects/:id/runs')
   runs(@GetOrgFromRequest() org: Organization, @Param('id') id: string) { return this.safe(() => this.studio.list(org.id, id)); }
   @Post('/projects/:id/runs')

@@ -53,3 +53,43 @@ test('native completion stores output and usage, and cannot be overwritten by la
 test('native claimant cannot execute a Higgsfield reservation',async()=>{
   const id=randomUUID();await jobs.reserve(a,id,doc.id,3,connection,{},10,'queued');assert.equal(await jobs.claimNative(a,id),undefined);
 });
+
+const providerAccount='native:magnific:ci-account-not-real';let providerProject,providerRun;
+test('upstream provider reservation admits only one active request per project',async()=>{
+ providerProject=await docs.create(a,{kind:'project',title:'Upstream test',data:{mode:'image',prompt:'Fixture'}});
+ const ids=[randomUUID(),randomUUID()];
+ const attempts=await Promise.allSettled(ids.map(id=>jobs.reserve(a,id,providerProject.id,1,providerAccount,{mode:'image',_providerPlan:{modelId:'fixture'}},100)));
+ assert.equal(attempts.filter(item=>item.status==='fulfilled').length,1);
+ providerRun=attempts.find(item=>item.status==='fulfilled').value.run.id;
+ const duplicate=await jobs.reserve(a,providerRun,providerProject.id,1,providerAccount,{},100);
+ assert.equal(duplicate.created,false);
+});
+test('provider operation persists after reconnect and additive schema replay',async()=>{
+ const upstreamId=randomUUID(),operation={pollUrl:'/v1/ai/text-to-image/flux-2-pro/'+upstreamId};
+ await jobs.providerAccepted(a,providerRun,upstreamId,operation);await applyWorkspaceSchema(db);
+ const second=new PrismaClient();try{
+  const restored=await createStudioRepository(second).get(a,providerRun);
+  assert.equal(restored.requestId,upstreamId);assert.equal(restored.status,'queued');assert.deepEqual(restored.providerState.operation,operation);
+ }finally{await second.$disconnect();}
+});
+test('foreign tenant cannot poll, mutate or claim an upstream task',async()=>{
+ await jobs.providerResult(b,providerRun,'completed',{assets:[{url:'https://example.test/foreign.png'}]});
+ assert.equal(await jobs.claimProviderImport(b,providerRun),undefined);
+ assert.equal((await jobs.get(a,providerRun)).status,'queued');assert.equal(await jobs.get(b,providerRun),undefined);
+});
+test('late polling responses cannot regress completed output',async()=>{
+ await jobs.providerResult(a,providerRun,'completed',{assets:[{url:'https://example.test/result.png'}]});
+ await jobs.providerResult(a,providerRun,'in_progress',{});
+ const saved=await jobs.get(a,providerRun);assert.equal(saved.status,'completed');assert.equal(saved.providerState.assets[0].url,'https://example.test/result.png');
+});
+test('concurrent imports have exactly one claimant; uncertain import stays blocked',async()=>{
+ const claims=await Promise.all([jobs.claimProviderImport(a,providerRun),jobs.claimProviderImport(a,providerRun)]);
+ assert.equal(claims.filter(Boolean).length,1);await jobs.providerImportUncertain(a,providerRun);
+ assert.equal(await jobs.claimProviderImport(a,providerRun),undefined);assert.equal((await jobs.get(a,providerRun)).providerState.importState,'unknown');
+});
+test('unknown billable request cannot be resubmitted under a fresh client id',async()=>{
+ const id=randomUUID();await jobs.reserve(a,id,providerProject.id,1,providerAccount,{mode:'image'},100);
+ await jobs.update(a,id,'unknown');
+ await assert.rejects(()=>jobs.reserve(a,randomUUID(),providerProject.id,1,providerAccount,{},100),StudioReservationError);
+ assert.equal((await jobs.reserve(a,id,providerProject.id,1,providerAccount,{},0)).created,false);
+});
