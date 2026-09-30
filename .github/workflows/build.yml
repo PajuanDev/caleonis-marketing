@@ -1,7 +1,7 @@
 name: Build
 on:
   push:
-    paths-ignore: ['/*.md']
+    paths-ignore: ['*.md']
   merge_group:
   pull_request:
 permissions:
