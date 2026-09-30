@@ -1,6 +1,7 @@
 name: Build
 on:
   push:
+    paths-ignore: ['/*.md']
   merge_group:
   pull_request:
 permissions:
@@ -31,8 +32,16 @@ jobs:
         run: NODE_ENV=development pnpm install --frozen-lockfile
       - name: Test cookie isolation and branding
         run: node --experimental-strip-types --test var/caleonis/cookie-domain.test.mjs var/caleonis/brand-routes.test.mjs
-      - name: Build frontend, backend and orchestrator
-        run: pnpm run build
+      - name: Check frontend types
+        run: pnpm exec tsc --noEmit -p apps/frontend/tsconfig.json
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+      - name: Build backend and orchestrator
+        run: pnpm --filter ./apps/backend --filter ./apps/orchestrator --workspace-concurrency=1 run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+      - name: Build frontend
+        run: pnpm --filter ./apps/frontend run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
           NEXT_TELEMETRY_DISABLED: '1'
