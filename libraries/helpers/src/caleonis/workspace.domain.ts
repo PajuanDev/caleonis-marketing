@@ -30,7 +30,8 @@ export function validateDocument(body: unknown): DocumentInput {
   const raw = input.data as Record<string, unknown>;
   const data: Record<string, string | string[]> = {};
   for (const key of Object.keys(raw)) {
-    if (!Object.hasOwn(fields[kind], key) && !(kind === 'project' && key === 'referenceIds')) throw new WorkspaceInputError('Champ non pris en charge.');
+    // Preserve own-property checking without raising the frontend TypeScript target.
+    if (!Object.prototype.hasOwnProperty.call(fields[kind], key) && !(kind === 'project' && key === 'referenceIds')) throw new WorkspaceInputError('Champ non pris en charge.');
   }
   for (const [key, limit] of Object.entries(fields[kind])) {
     const value = raw[key] ?? '';

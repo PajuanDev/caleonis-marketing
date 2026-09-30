@@ -53,7 +53,5 @@ jobs:
           node_modules/.bin/prisma db push --skip-generate --schema libraries/nestjs-libraries/src/database/prisma/schema.prisma
       - name: Test persistence, tenant boundaries and concurrent reservations
         run: node --experimental-strip-types --test var/caleonis/workspace-db.test.mjs
-      - name: Verify upstream db push does not discard the separate workspace schema
-        run: |
-          node_modules/.bin/prisma db push --skip-generate --schema libraries/nestjs-libraries/src/database/prisma/schema.prisma
-          node --experimental-strip-types --test var/caleonis/workspace-db.test.mjs
+      - name: Verify existing seeded records survive upstream db push
+        run: node --experimental-strip-types --test var/caleonis/workspace-upstream-compat.test.mjs
