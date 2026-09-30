@@ -1,14 +1,10 @@
-import { ThirdPartyComponent } from '@gitroom/frontend/components/third-parties/third-party.component';
-
+import type { Metadata } from 'next';
+import { CreativeApps } from '@gitroom/frontend/caleonis/creative-apps.component';
+import { CALEONIS_BRAND } from '@gitroom/frontend/caleonis/brand';
 export const dynamic = 'force-dynamic';
-import { Metadata } from 'next';
-import { isGeneralServerSide } from '@gitroom/helpers/utils/is.general.server.side';
 export const metadata: Metadata = {
-  title: `${
-    isGeneralServerSide() ? 'Postiz Integrations' : 'Gitroom Integrations'
-  }`,
-  description: '',
+  title: `Apps créatives — ${CALEONIS_BRAND.name}`,
+  description: 'Studio intégré et applications créatives optionnelles de votre entreprise.',
+  robots: { index: false, follow: false },
 };
-export default async function Index() {
-  return <ThirdPartyComponent />;
-}
+export default function Page() { return <CreativeApps />; }
