@@ -6,7 +6,7 @@ Dernier commit testé : `e7c754f1384d4adcbe928a8a1ef5cfd50ab8c160` (correction d
 
 ## Livraison et reprise
 
-**Travail enregistré sur la branche de développement ; non fusionné dans main et non déployé sur Railway.** Aucun changement aux comptes, secrets, abonnements, fournisseurs ou projets Railway. Aucune génération payante ni publication réelle effectuée.
+**Travail enregistré sur la branche de développement ; non fusionné dans main et non déployé sur Railway.** Aucun changement aux comptes, secrets, abonnements, fournisseurs ou projets Railway. Aucune génération payante ni publication réelle effectuée. Les commits documentaires suivants ne modifient pas le code testé.
 
 La reprise a retrouvé deux commits après le précédent compte rendu, dont `b9a4ac42a2d3f7d53f24dc2721e9dfbfa4e51957`. Ils avaient déjà ajouté les routes studio, le composant hôte, le canal vers les API existantes et la compilation du studio dans le Dockerfile. Leur build Caléonis `36755662495` était réussi, mais leur test navigateur `36755662398` avait échoué. Ces changements ont été conservés, pas recréés.
 
@@ -62,7 +62,7 @@ Job `110055849311` : tests du canal existant et **37 nouveaux tests** de validat
 
 Job `110055849027` : **5 nouveaux tests sur PostgreSQL 17 réel isolé** réussis : sauvegarde des réglages et références, relecture depuis une nouvelle connexion, refus d'accès/écriture par une autre entreprise au niveau dépôt, écritures concurrentes, version antérieure conservée.
 
-Artifact **11119629766**, créé à 19:19:19 UTC, récupéré et inspecté. Les captures `image-studio.png`, `video-studio.png`, `shared-media.png` et `denied-session.png` ont été ouvertes. Elles montrent les vrais composants du studio et de l'hôte avec une API de test, pas une nouvelle version de production.
+Artifact **11119629766**, créé à 19:19:19 UTC, récupéré et inspecté. Son SHA-256 vérifié correspond au digest GitHub : `c7231f0d654436f777d88fc98aa8f1e835887a65e699a91f162fb6025773822e`. Les captures `image-studio.png`, `video-studio.png`, `shared-media.png` et `denied-session.png` ont été ouvertes. Elles montrent les vrais composants du studio et de l'hôte avec une API de test, pas une nouvelle version de production.
 
 Le test navigateur saisit le brief, change la résolution, sélectionne un média, sauvegarde, recharge, vérifie la restauration, change de mode, sauvegarde et recharge de nouveau. Il simule ensuite une réponse 403 de l'API et vérifie l'absence de compositeur, puis ouvre directement le document statique et vérifie qu'il ne charge pas un projet sans l'hôte.
 
@@ -94,10 +94,10 @@ La persistance navigateur utilise une API mémoire de test ; la persistance Post
 
 Le premier essai de ce lot (`36764270141`) avait sélectionné une option 2k absente du premier modèle. L'inspection de l'écran a montré 1k et 1.5k. Seul le test a été corrigé pour sélectionner 1.5k ; aucune capacité du modèle ni assertion de restauration n'a été supprimée.
 
-Le workflow de compilation Caléonis complet `36764711895`, job `110055966915`, a déjà réussi les tests Higgsfield/cookies/marque existants, TypeScript et les compilations backend/orchestrateur. Au dernier contrôle pendant la rédaction, le frontend était encore en cours : vérifier sa conclusion finale avant fusion. Le succès du build embarqué ne remplace pas ce contrôle.
+**La compilation Caléonis complète est maintenant terminée et réussie.** Workflow Build **36764711895**, job **110055966915**, commit `e7c754f1384d4adcbe928a8a1ef5cfd50ab8c160` : statut completed, conclusion success, toutes les étapes terminées avec succès. Les tests Higgsfield/cookies/marque existants, TypeScript et les compilations frontend, backend et orchestrateur sont réussis. Les deux contrôles distincts sont donc validés : build du studio embarqué et build Caléonis complet. Aucun build Docker de production ni déploiement Railway n'a été exécuté dans cette reprise.
 
 ## Suite
 
 Raccorder les fournisseurs configurés et les paramètres de chaque modèle aux tâches Caléonis, conserver les garde-fous de coût et de version, attacher les médias aux rôles attendus, puis relier les résultats à la campagne et à la médiathèque. Ne pas reconstruire les contrôles du studio amont.
 
-Avant déploiement : terminer les vérifications de compilation, l'intégration API et le contrôle d'authentification en environnement isolé, puis préparer sauvegarde/restauration. L'activation des fournisseurs, les essais de qualité réels et la batterie complète de recette restent ultérieurs. Aucun test manuel intermédiaire n'est demandé au propriétaire.
+Avant déploiement : compléter l'intégration API et le contrôle d'authentification en environnement isolé, puis préparer sauvegarde/restauration. L'activation des fournisseurs, les essais de qualité réels et la batterie complète de recette restent ultérieurs. Aucun test manuel intermédiaire n'est demandé au propriétaire.
