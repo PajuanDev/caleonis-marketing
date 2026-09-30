@@ -1,9 +1,9 @@
 # Caléonis Marketing — premier lot des espaces métier
 
 État au 30 septembre 2026. Branche : `feat/marketing-workspace-v1`.
-Code applicatif examiné : `e61390f9d3dccca32381e6d4b2891d91d01a1630`.
+Code applicatif testé : `e61390f9d3dccca32381e6d4b2891d91d01a1630`.
 
-**Ce lot est enregistré sur une branche de développement, pas fusionné dans main et pas déployé sur Railway.** La production, les secrets, les comptes du propriétaire, les abonnements et Caléonis Réception n'ont pas été modifiés par ce lot. Aucun service supplémentaire ni génération payante n'a été commandé.
+**Ce lot est enregistré sur une branche de développement, pas fusionné dans main et pas déployé sur Railway.** La production, les secrets, les comptes du propriétaire, les abonnements et Caléonis Réception n'ont pas été modifiés par ce lot. Aucun service supplémentaire ni génération payante n'a été commandé. Les commits documentaires suivants ne changent pas le code applicatif testé.
 
 ## Fonctionnement implémenté dans cette branche
 
@@ -38,15 +38,17 @@ Première adaptation du contrat de capacités de modèles de `TechBeme/open-higg
 
 Il ne s'agit PAS de l'import de toute son interface, de son catalogue multi-fournisseurs ni de ses modèles. L'interface de ce premier lot est un espace métier initial ; le travail visuel et créatif final reste à faire. Aucune équivalence de qualité avec Higgsfield n'a été mesurée ou annoncée.
 
-## Vérifications exécutées
+## Vérifications exécutées — 75 tests techniques réussis
 
-Sur le commit applicatif ci-dessus, workflow `Caleonis workspace safety`, run `36743675007` :
+Sur le commit applicatif ci-dessus, workflow `Caleonis workspace safety`, run `36743675007`, terminé avec succès :
 
 - Job `109984304658` : 36 tests de validation de documents, paramètres, références, versions et rejet des champs non autorisés ; tous réussis.
 - Job `109984304455` : 9 scénarios sur PostgreSQL 17 réel, dans une base locale jetable explicitement gardée ; tous réussis. Ils portent sur les accès par entreprise au niveau dépôt de données, les versions, écritures concurrentes et réservations de générations.
 - Le même job exécute un scénario supplémentaire : créer une marque, une campagne, un projet avec deux versions et une demande incertaine ; déconnecter le client ; exécuter la vraie commande `prisma db push` amont ; rouvrir une connexion et vérifier les données ainsi que la réservation anti-répétition. Ce scénario a réussi.
 
-Le workflow Build `36743675191`, job `109984305965`, a déjà réussi les 20 tests simulés Higgsfield existants, les 6 tests de cookies, les 3 tests de marque, la vérification TypeScript et les compilations du serveur et de l'orchestrateur. Au moment de cette rédaction, sa compilation frontend est encore en cours : consulter son résultat final avant fusion.
+Le workflow Build `36743675191`, job `109984305965`, est TERMINÉ avec conclusion SUCCESS (run vérifié, mise à jour du 30 septembre 2026 à 16:28:14 UTC). Il a réussi les 20 tests simulés Higgsfield existants, les 6 tests de cookies, les 3 tests de marque, la vérification TypeScript et les compilations frontend, backend et orchestrateur.
+
+Total : 36 tests de contrats + 10 scénarios PostgreSQL + 29 tests existants = 75 tests techniques. Ce nombre est distinct des 100 scénarios de recette utilisateur prévus.
 
 L'essai précédent avait échoué parce que la bibliothèque TypeScript frontend ne déclarait pas Object.hasOwn. Le correctif utilise Object.prototype.hasOwnProperty.call sans affaiblir les contrôles ni modifier la cible TypeScript.
 
@@ -56,4 +58,4 @@ Ces vérifications ne remplacent pas les tests HTTP entre utilisateurs, la conne
 
 Priorité suivante : approfondir la reprise du vrai studio multi-fournisseurs (interface créative, adaptateur image natif, références produit, puis vidéo), sans réintroduire un studio fictif ou une seconde application indépendante. Ensuite : contexte marque/campagne effectivement utilisé par les agents, productions multi-format, validations liées aux versions et liaison au calendrier.
 
-Avant fusion et déploiement : vérifier la compilation finale, effectuer une revue des routes authentifiées et un contrôle d'affichage en environnement isolé, préparer sauvegarde et restauration, puis conserver les générations désactivées jusqu'à configuration. L'écran de suivi de cette branche ne doit pas être présenté comme déjà disponible à l'adresse du pilote.
+Avant fusion et déploiement : effectuer une revue des routes authentifiées et un contrôle d'affichage en environnement isolé, préparer sauvegarde et restauration, puis conserver les générations désactivées jusqu'à configuration. L'écran de suivi de cette branche ne doit pas être présenté comme déjà disponible à l'adresse du pilote.
