@@ -1,115 +1,57 @@
 // @ts-check
 import { withSentryConfig } from '@sentry/nextjs';
 
+const sentryConfigured = Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_AUTH_TOKEN);
+const uploadSourceMaps = Boolean(process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // jsdom loads its stylesheet from disk. Keep the server sanitizer and its
-  // Node dependencies outside webpack; client-side sanitization is unchanged.
+  // Preserve jsdom's filesystem assets; HTML sanitization remains enabled.
   serverExternalPackages: ['isomorphic-dompurify', 'jsdom'],
   experimental: {
     proxyTimeout: 90_000,
+    webpackMemoryOptimizations: true,
   },
-  // Document-Policy header for browser profiling
   async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          {
-            key: 'Document-Policy',
-            value: 'js-profiling',
-          },
-        ],
-      },
-    ];
+    return [{ source: '/:path*', headers: [{ key: 'Document-Policy', value: 'js-profiling' }] }];
   },
   reactStrictMode: false,
   transpilePackages: ['crypto-hash'],
-  // Enable production sourcemaps for Sentry
-  productionBrowserSourceMaps: true,
-
-  // Custom webpack config to ensure sourcemaps are generated properly
-  webpack: (config, { buildId, dev, isServer, defaultLoaders }) => {
-    // Enable sourcemaps for both client and server in production
-    if (!dev) {
-      config.devtool = isServer ? 'source-map' : 'hidden-source-map';
-    }
-
+  // Source maps are useful only when an upload destination is configured.
+  // Do not exhaust the pilot builder generating maps for an absent Sentry account.
+  productionBrowserSourceMaps: uploadSourceMaps,
+  webpack: (config, { dev, isServer }) => {
+    if (!dev) config.devtool = uploadSourceMaps ? (isServer ? 'source-map' : 'hidden-source-map') : false;
     return config;
   },
   async redirects() {
-    return [
-      {
-        source: '/api/uploads/:path*',
-        destination:
-          process.env.STORAGE_PROVIDER === 'local' ? '/uploads/:path*' : '/404',
-        permanent: true,
-      },
-    ];
+    return [{ source: '/api/uploads/:path*', destination: process.env.STORAGE_PROVIDER === 'local' ? '/uploads/:path*' : '/404', permanent: true }];
   },
   async rewrites() {
-    return [
-      {
-        source: '/uploads/:path*',
-        destination:
-          process.env.STORAGE_PROVIDER === 'local'
-            ? '/api/uploads/:path*'
-            : '/404',
-      },
-    ];
+    return [{ source: '/uploads/:path*', destination: process.env.STORAGE_PROVIDER === 'local' ? '/api/uploads/:path*' : '/404' }];
   },
 };
 
-export default withSentryConfig(nextConfig, {
+export default sentryConfigured ? withSentryConfig(nextConfig, {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,
-
-  // Sourcemap configuration optimized for monorepo
   sourcemaps: {
-    disable: false,
-    // More comprehensive asset patterns for monorepo
-    assets: [
-      '.next/static/**/*.js',
-      '.next/static/**/*.js.map',
-      '.next/server/**/*.js',
-      '.next/server/**/*.js.map',
-    ],
-    ignore: [
-      '**/node_modules/**',
-      '**/*hot-update*',
-      '**/_buildManifest.js',
-      '**/_ssgManifest.js',
-      '**/*.test.js',
-      '**/*.spec.js',
-    ],
+    disable: !uploadSourceMaps,
+    assets: ['.next/static/**/*.js', '.next/static/**/*.js.map', '.next/server/**/*.js', '.next/server/**/*.js.map'],
+    ignore: ['**/node_modules/**', '**/*hot-update*', '**/_buildManifest.js', '**/_ssgManifest.js', '**/*.test.js', '**/*.spec.js'],
     deleteSourcemapsAfterUpload: true,
   },
-
-  // Release configuration
   release: {
-    create: true,
-    finalize: true,
-    // Use git commit hash for releases in monorepo
-    name:
-      process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || undefined,
+    create: uploadSourceMaps,
+    finalize: uploadSourceMaps,
+    name: process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || undefined,
   },
-
-  // NextJS specific optimizations for monorepo
   widenClientFileUpload: true,
-
-  // Additional configuration
   telemetry: false,
   silent: process.env.NODE_ENV === 'production',
   debug: process.env.NODE_ENV === 'development',
-
-  // Error handling for CI/CD
   errorHandler: (error) => {
     console.warn('Sentry build error occurred:', error.message);
-    console.warn(
-      'This might be due to missing Sentry environment variables or network issues'
-    );
-    // Don't fail the build if Sentry upload fails in monorepo context
-    return;
   },
-});
+}) : nextConfig;
