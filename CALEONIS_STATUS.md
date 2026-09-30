@@ -5,47 +5,56 @@
 Dépôt : `PajuanDev/caleonis-marketing`, branche `main`.
 Commit applicatif testé et déployé : `fcabe308d0d7319bce50df5237fd7f980488c21d`.
 Déploiement Railway : `7523a987-e491-4890-b1c2-f6ab2a4f0c74`, statut SUCCESS vérifié.
-Le contrôle `/healthz` a réussi le 30 septembre 2026 à 15:24:20 UTC. Le backend confirme son démarrage sur le port 3000 à 15:24:18 UTC. La compilation complète de l'image et ses tests ont réussi.
-Les commits de documentation suivants ne modifient pas ce code applicatif déployé.
+Le contrôle `/healthz` a réussi le 30 septembre 2026 à 15:24:20 UTC. Le backend confirme son démarrage sur le port 3000 à 15:24:18 UTC. Les commits de documentation suivants ne modifient pas ce code applicatif déployé.
 
 Adresse : `https://caleonis-marketing-production.up.railway.app`.
 Connexion : `/auth/login`.
 Nouveau point d'entrée : `/third-party`, après authentification.
 
-## Incrément Apps créatives livré dans le code déployé
+## Apps créatives présentes dans le code déployé
 
 Postiz reste le socle du studio natif et de la publication. Le nouvel écran « Vos apps créatives » rassemble les accès au studio intégré, à la médiathèque et au calendrier, ainsi qu'une carte de connexion facultative à Higgsfield. Les autres intégrations Postiz restent accessibles à `/third-party/other`.
 
 Le premier connecteur Higgsfield est limité à Marketing Studio Image : brief textuel, format d'image, résolution 1K / 2K / 4K, confirmation de la facturation externe, suivi asynchrone et import volontaire en médiathèque. La vidéo, les références produit, les presets publicitaires et les autres modèles Higgsfield ne sont pas exposés par cet incrément.
 
-Les identifiants API de l'entreprise se saisissent dans une fenêtre dédiée. Le serveur effectue un GET de catalogue pour la connexion ; cette action ne lance pas de génération. Il utilise ensuite le mécanisme chiffré existant des connexions ThirdParty. Aucune clé n'est conservée dans sessionStorage ou renvoyée dans la liste des connexions. Il ne s'agit pas d'un nouveau coffre-fort audité ; la modernisation du chiffrement et la rotation des secrets restent à prévoir avant généralisation.
+Les identifiants API de l'entreprise se saisissent dans une fenêtre dédiée Key ID / Key Secret. Le serveur demande le catalogue par GET ; la connexion ne lance pas de génération. Il utilise le mécanisme chiffré existant des connexions ThirdParty, pas un nouveau coffre-fort audité. La modernisation du chiffrement et la rotation des secrets restent à prévoir avant généralisation. Aucune clé n'est conservée dans sessionStorage ou renvoyée dans la liste des connexions.
 
-Les tâches sont rattachées à l'organisation authentifiée et à sa connexion, avec suivi Redis sept jours. La réservation NX précède le POST payant. Un envoi répété avec le même UUID et le même brief réutilise le suivi ; un timeout ambigu ne déclenche jamais de nouveau POST automatique. L'import d'un résultat terminé ne commande pas une seconde génération. Deux imports simultanés peuvent néanmoins créer des entrées médias en double ; ne pas annoncer une garantie transactionnelle exactement-une-fois.
+Les tâches sont rattachées à l'organisation authentifiée et à sa connexion, avec suivi Redis sept jours. La réservation NX précède le POST payant. Répéter le même UUID et le même brief réutilise le suivi ; un timeout ambigu ne déclenche jamais de nouveau POST automatique. L'import d'un résultat terminé ne commande pas une seconde génération. Deux imports simultanés peuvent néanmoins créer deux entrées médias ; aucune garantie transactionnelle exactement-une-fois n'est annoncée.
 
-Aucune publication sur un réseau social n'est déclenchée par ce parcours. Higgsfield n'est pas requis pour le studio natif. Le détail et les limites sont décrits dans CALEONIS_CREATIVE_APPS.md.
+Aucune publication sociale n'est déclenchée par ce parcours. Higgsfield n'est pas requis pour le studio natif. Détail : CALEONIS_CREATIVE_APPS.md.
 
 ## Tests et compilation réellement réussis
 
-Run GitHub Actions `36734224894`, job `109951552569`, commit `fcabe308d0d7319bce50df5237fd7f980488c21d` : conclusion SUCCESS, toutes les étapes terminées avec succès.
+Run GitHub Actions `36734224894`, job `109951552569`, sur le commit applicatif ci-dessus : conclusion SUCCESS, toutes les étapes terminées avec succès.
 
-- 20 tests du vrai moteur Higgsfield avec réseau et stockage simulés, sans clé ni dépense : validation, consentement, séparation des organisations, non-répétition du POST, gestion des erreurs et import simulé.
+- 20 tests du vrai moteur Higgsfield avec réseau et stockage simulés : validation, consentement, séparation des organisations, non-répétition du POST, erreurs et import simulé.
 - 6 tests de portée des cookies Railway et 3 tests de transformation de marque.
 - Vérification TypeScript du frontend.
 - Compilation frontend, backend et orchestrateur.
 
-Le premier essai de compilation frontend avait dépassé la limite mémoire. La configuration Next.js évite désormais de générer des source maps Sentry inutilisées en l'absence de destination configurée et active l'optimisation mémoire webpack. Cette correction a permis au run complet et à la compilation Railway d'aboutir. TypeScript, sanitisation HTML et healthchecks n'ont pas été désactivés.
+Les tests et compilations ont également réussi dans le build Docker Railway. Le premier essai CI avait dépassé la limite mémoire frontend ; la configuration évite désormais les source maps Sentry inutilisées quand aucune destination n'est configurée et active l'optimisation mémoire webpack. TypeScript, sanitisation HTML et contrôles de disponibilité n'ont pas été désactivés.
 
-Les tests simulés ne prouvent pas le fonctionnement réel du compte Higgsfield, la qualité des rendus ou l'isolation de bout en bout des routes HTTP entre utilisateurs.
+Ces tests simulés ne prouvent pas le fonctionnement d'un vrai compte Higgsfield, la qualité des rendus ou l'isolation de bout en bout des routes HTTP entre utilisateurs.
 
-## Contrôles navigateur et accès
+## Accès public et affichage vérifiés après déploiement
 
-Le run navigateur `36732984061`, première tentative, job `109947365727`, a contrôlé le pilote avant cette mise en ligne : titre « Connexion — Caléonis Marketing », champs e-mail et mot de passe présents après chargement, aucune erreur JavaScript relevée et capture effectuée. L'ancien timeout du vérificateur Railway n'est donc plus la seule observation disponible.
+Le contrôle HTTP indépendant `36737241580`, job `109962047175`, s'est terminé avec succès à 15:30:26 UTC. Son résultat vérifié :
 
-Une deuxième tentative, job `109959087498`, a ouvert la page pendant la bascule du déploiement et reçu une page 502 à 15:24:28 UTC. Malgré la conclusion SUCCESS du workflow de collecte, ce résultat n'est PAS une validation de l'affichage : ce script récolte des diagnostics mais ne possède pas encore d'assertion bloquante sur leur contenu. Ne jamais assimiler le succès du workflow à une connexion réussie.
+```json
+{"health_http":200,"health":"ready","login_http":200,"login_title":"Connexion — Caléonis Marketing","credentials_used":false}
+```
 
-Une troisième tentative de lecture, job `109959828742`, a été lancée après le démarrage pour recontrôler l'accès public ; son résultat n'était pas disponible au moment de cette consignation. Le statut Railway SUCCESS et la réussite du healthcheck restent distincts de la validation du formulaire après déploiement.
+Le troisième essai navigateur du run `36732984061`, job `109959828742`, a ensuite vérifié l'URL publique à 15:30:53 UTC. L'artifact `11107418413`, créé à 15:30:55 UTC, a été récupéré et inspecté :
 
-Aucun identifiant de connexion du propriétaire n'a été utilisé. Aucun compte, rôle ou mot de passe n'a été créé, lu ou modifié durant cet incrément. Le compte propriétaire existant et son activation avaient été confirmés par le contrôle SQL en lecture seule de la reprise précédente ; les inscriptions restent configurées fermées.
+```json
+{"title":"Connexion — Caléonis Marketing","inputs":[{"name":"email","type":"email"},{"name":"password","type":"password"}],"ready":"complete"}
+```
+
+Le fichier errors.txt est vide. La capture login.png a été ouverte et montre effectivement le formulaire Caléonis. Cela valide l'affichage public, pas l'authentification ni le parcours Apps après connexion. Les textes du formulaire conservent encore des libellés anglais et le bouton Google visible ne constitue pas une preuve que son fournisseur OAuth est configuré.
+
+Un contrôle précédent, lancé pendant la bascule, avait reçu une page 502. Ce résultat n'a pas été considéré comme un succès d'affichage, même si le workflow de collecte finissait en SUCCESS. Le test HTTP à assertions et l'examen du dernier artifact confirment qu'au dernier contrôle cette erreur n'est plus reproduite. Le workflow navigateur de collecte reste à durcir avec des assertions explicites ; sa conclusion seule ne suffit pas.
+
+Aucun mot de passe du propriétaire n'a été utilisé, lu ou modifié, aucun jeton de connexion forgé et aucun compte créé durant cet incrément. Le compte propriétaire existant et activé avait été confirmé en lecture seule lors de la reprise précédente. Les inscriptions restent configurées fermées.
 
 ## Infrastructure conservée
 
@@ -58,23 +67,23 @@ Projet Railway `b39ac92f-ffcd-4cf5-9698-41b1c05a20ce`, environnement production 
 | Temporal | `7ab1c833-4d4c-499b-b3bb-50f3a9b5da81` | Bases PostgreSQL `temporal` et `temporal_visibility`, namespace `default` |
 | Application | `0a2b86b8-5a33-4b98-9ed6-cb7ba6adcd94` | Volume `d13dfa41-c3a7-4c24-94f5-a09459d616f7`, 1024 MB, `/uploads` |
 
-Les services de données et leurs volumes ont été conservés. Aucune nouvelle infrastructure Railway ni GPU n'a été ajouté pour le connecteur ; les vérifications supplémentaires ont utilisé GitHub Actions. Les services de données restent privés. Caléonis Réception et les autres projets n'ont pas été modifiés.
+Aucun nouveau service Railway ni GPU n'a été ajouté pour ce connecteur ; les vérifications supplémentaires ont utilisé GitHub Actions. Les services de données restent privés. Caléonis Réception et les autres projets n'ont pas été modifiés.
 
-La région actuelle reste `sfo`. Avant données clients : revoir la région, les droits SQL, la rotation des secrets, les sauvegardes/restaurations, les quotas, le budget et les tests d'isolation multi-organisation. La reprise du suivi créatif après panne de Redis reste aussi à éprouver. Un volume persistant n'est pas une sauvegarde.
+La région actuelle reste `sfo`. Avant données clients : revoir la région, les droits SQL, la rotation des secrets, les sauvegardes/restaurations, les quotas, le budget, l'isolation multi-organisation et la reprise du suivi créatif après panne Redis. Un volume persistant n'est pas une sauvegarde.
 
 ## Nettoyage ancien en attente
 
-Le service de test `caleonis-verification-temp` (`2ded3c9c-4275-4248-9cc2-55976ec7ff44`) reste arrêté, sans volume et sans redémarrage automatique. Sa suppression est préparée dans le patch `aae5f7a0-556e-4fb5-af74-a9d17fd92d63`. La validation à deux facteurs doit être effectuée dans Railway ; elle n'a pas été contournée. Ne pas supprimer les quatre services applicatifs ni leurs volumes. L'ancien service SQL ponctuel est absent.
+Le service de test `caleonis-verification-temp` (`2ded3c9c-4275-4248-9cc2-55976ec7ff44`) reste arrêté, sans volume et sans redémarrage automatique. Sa suppression est préparée dans le patch `aae5f7a0-556e-4fb5-af74-a9d17fd92d63`. La vérification à deux facteurs doit être effectuée dans Railway ; elle n'a pas été contournée. Ne pas supprimer les quatre services applicatifs ni leurs volumes. L'ancien service SQL ponctuel est absent.
 
-## Ce qui n'est pas encore validé ou livré
+## Ce qui reste à valider ou construire
 
-Aucune clé Higgsfield, OpenAI, connexion sociale, configuration Stripe ou fournisseur d'e-mail n'a été ajoutée pendant cet incrément. Aucune génération payante ni publication réelle n'a été effectuée. Le studio natif a toujours besoin de la configuration de ses fournisseurs IA ; sa présence dans l'interface ne signifie pas que toutes ses fonctions IA sont actives.
+Aucune clé Higgsfield, OpenAI, connexion sociale, configuration Stripe ou fournisseur d'e-mail n'a été ajoutée pendant cet incrément. Aucune génération payante ni publication réelle n'a été effectuée. Le studio natif nécessite toujours la configuration de ses propres fournisseurs IA ; la présence des boutons ne signifie pas que toutes ses fonctions IA sont actives.
 
-À valider : authentification du propriétaire, parcours Apps authentifié, connexion Higgsfield consentie, une génération image autorisée et son import, conservation des médias, connexion d'un premier réseau et publication expressément autorisée.
+À valider : authentification du propriétaire, parcours Apps authentifié, connexion Higgsfield consentie, une génération image autorisée et son import, conservation des médias, puis premier réseau et publication expressément autorisée.
 
-Le profil marketing de l'entreprise, les campagnes enrichies, la stratégie autonome et la connexion à Caléonis OS ne sont pas encore livrés. Caléonis Marketing reste un pilote en cours de validation, pas une infrastructure marketing complète prête pour tous les clients.
+Le profil marketing de l'entreprise, les campagnes enrichies, la stratégie autonome et la connexion à Caléonis OS ne sont pas encore livrés. Le produit reste un pilote en cours de validation, pas une infrastructure marketing complète prête pour tous les clients.
 
 ## Déploiement
 
-L'action redeploy peut reprendre un ancien snapshot. Pour cet incrément, main a été avancé sans forçage après réussite des contrôles, puis CALEONIS_RELEASE a été mis à fcabe308d0d7319bce50df5237fd7f980488c21d pour déclencher le bon code. Le meta.commitHash réel du déploiement a été vérifié.
-Les modifications de documentation seules ne justifient pas une reconstruction de l'application ; les watch paths Railway restent `**`, `!/*.md`.
+Main a été avancé sans forçage après réussite des contrôles, puis CALEONIS_RELEASE a été mis à fcabe308d0d7319bce50df5237fd7f980488c21d pour déclencher le bon code. Son meta.commitHash a été vérifié. L'action redeploy peut reprendre un ancien snapshot ; contrôler la version réellement construite.
+Les modifications de documentation seules ne justifient pas une reconstruction de l'application. Les watch paths Railway restent `**`, `!/*.md`. Le nouveau workflow HTTP de contrôle se trouve pour l'instant dans la branche feat/creative-apps-v1 ; il a testé l'URL de production sans la modifier.
