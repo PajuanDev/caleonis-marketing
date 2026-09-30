@@ -1,7 +1,8 @@
 name: Caleonis pilot checks
 on:
   push:
-    branches: [feat/creative-apps-v1]
+    branches: [feat/creative-apps-v1, main]
+    paths: ['.github/workflows/caleonis-preview-check.yml', 'apps/frontend/src/components/auth/**', 'libraries/react-shared-libraries/src/helpers/mantine.wrapper.tsx']
   workflow_dispatch:
 permissions:
   contents: read
@@ -34,6 +35,7 @@ jobs:
           mkdir -p /tmp/caleonis-check
           trap '$AB close || true' EXIT
           $AB open https://caleonis-marketing-production.up.railway.app/auth/login
+          $AB wait --load networkidle || true
           $AB snapshot -i > /tmp/caleonis-check/snapshot.txt
           $AB get text body > /tmp/caleonis-check/body.txt
           $AB errors > /tmp/caleonis-check/errors.txt
