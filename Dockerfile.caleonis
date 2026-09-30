@@ -21,7 +21,8 @@ RUN node --test var/caleonis/brand-routes.test.mjs \
 # Do not pass --prod=false: pnpm 10.6.1 excludes production dependencies
 # with that explicit option. Build tooling and runtime dependencies are both needed.
 RUN NODE_ENV=development pnpm install --frozen-lockfile
-RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm run build
+RUN node --experimental-strip-types --test var/caleonis/cookie-domain.test.mjs \
+    && NODE_OPTIONS="--max-old-space-size=4096" pnpm run build
 ENV NODE_ENV=production IS_GENERAL=true STORAGE_PROVIDER=local \
     UPLOAD_DIRECTORY=/uploads NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY=/uploads \
     BACKEND_INTERNAL_URL=http://127.0.0.1:3000 DISABLE_REGISTRATION=true
