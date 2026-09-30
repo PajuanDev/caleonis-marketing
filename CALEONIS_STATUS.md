@@ -1,49 +1,65 @@
-# Caléonis Marketing — état du bootstrap initial
+# Caléonis Marketing — état du déploiement
 
-## Code effectivement enregistré
+Mise à jour : 30 septembre 2026. Ce document distingue les opérations réellement vérifiées des tests encore à effectuer.
 
-Dépôt : PajuanDev/caleonis-marketing, branche main.
-Base amont au moment du fork : 9efa1f553c610eb4fffe6bdde48b420c8a9f4858.
-Premier commit d'identité : 8fd1753f8d406f071b75c3729cca89163050d0ce.
-Commit de l'interface et du déploiement : 9ec6b67fa077b14035a2869c12fb56748497454f.
+## Produit et code
 
-- Identité Caléonis centralisée, écran de connexion, marque dans la navigation et favicon.
-- Retrait des témoignages et du chiffre de clients de Postiz dans notre écran de connexion.
-- Liens visibles vers le code source, LICENSE et historique amont conservés.
-- Dockerfile.caleonis et railway.toml ajoutés pour compiler le véritable logiciel.
-- Supervision du frontend, du backend et de l'orchestrateur ; endpoint de disponibilité /healthz.
-- Refus du démarrage sans variables indispensables et sans volume /uploads en stockage local.
-- Initialisation Prisma sans acceptation automatique de perte de données.
+Application SaaS autonome issue du fork de Postiz, sans dépendance à Caléonis OS.
+Dépôt : `PajuanDev/caleonis-marketing`, branche `main`.
+Base amont initiale : `9efa1f553c610eb4fffe6bdde48b420c8a9f4858`.
+Identité initiale : `8fd1753f8d406f071b75c3729cca89163050d0ce`.
+Interface et préparation du déploiement : `9ec6b67fa077b14035a2869c12fb56748497454f`.
 
-Il s'agit d'un premier rebranding, pas d'un audit exhaustif de toutes les références Postiz ni d'une V1 commerciale validée.
+Premier rebranding : identité centralisée, connexion, navigation, favicon, accès au code source. Les témoignages et le chiffre de clients Postiz ne sont pas repris comme références Caléonis. Licence, attributions et historique amont conservés. Toutes les références de marque du logiciel ne sont pas encore auditées.
 
-## Vérifications réellement exécutées
+## Infrastructure réellement créée
 
-Les fichiers brand-routes.mjs et health.cjs ont été reproduits dans l'environnement local de vérification et testés avec Node 22.16.0, sans services externes.
+Projet Railway : `b39ac92f-ffcd-4cf5-9698-41b1c05a20ce`.
+Environnement production : `2a7e9409-5747-4b39-a9db-5083dcdbf3af`.
+Workspace : `pajuandev's Projects`.
 
-```sh
-node --test var/caleonis/brand-routes.test.mjs var/caleonis/health.test.cjs
-```
+| Service | ID | Persistance / accès |
+| --- | --- | --- |
+| Postgres | `89f82b02-ad13-4941-a2ef-1307f3deffae` | Volume `ce15ade9-377f-47f2-b160-01ac042e1487`, 1024 MB, `/var/lib/postgresql/data`, accès privé |
+| Redis | `6772c8cb-ac0b-4998-b29b-49881cf8a890` | Volume `ace32472-2a1f-48ab-a79d-2ff5047607b1`, 1024 MB, `/data`, authentification et AOF, accès privé |
+| Temporal | `7ab1c833-4d4c-499b-b3bb-50f3a9b5da81` | PostgreSQL persistant, bases séparées `temporal` et `temporal_visibility`, namespace `default`, accès privé |
+| Application | `0a2b86b8-5a33-4b98-9ed6-cb7ba6adcd94` | Volume `d13dfa41-c3a7-4c24-94f5-a09459d616f7`, 1024 MB, `/uploads`, passerelle HTTP 5000 |
 
-Résultat du runner : 8 tests, 8 pass, 0 fail (le total inclut le test parent du groupe readiness).
+Les trois volumes sont vérifiés comme réellement attachés dans le statut et la configuration Railway, pas seulement annoncés par l'agent.
+PostgreSQL et Redis ont démarré et acceptent les connexions. Temporal a démarré et enregistré le namespace `default`.
+La région actuellement provisionnée est `sfo`. Ne pas présenter ce pilote comme hébergé en Europe. Évaluer la région et les conditions d'hébergement avant accueil de données clients.
+Caléonis Réception n'a pas été modifié. Aucun abonnement ni plafond budgétaire n'a été modifié par les opérations de déploiement.
 
-Vérifications : remplacement ciblé des noms d'affichage, idempotence, conservation des identifiants techniques et des attributions ; HTTP 503 si les dépendances simulées manquent ou si le contrôle Temporal simulé échoue, HTTP 200 si les trois services simulés répondent, HTTP 404 pour les autres routes du serveur de contrôle.
+## Corrections effectuées pendant le déploiement
 
-Ces tests locaux utilisent des serveurs HTTP factices. Ils ne valident pas une connexion réelle à PostgreSQL, Redis ou Temporal, ni une publication sur un réseau social.
+- `05ae5b5d4ff9cfcac7c6e6102e960c9bc2e65e1d` : remplacement de `pnpm install --prod=false` par `NODE_ENV=development pnpm install --frozen-lockfile`, après l'erreur réelle `ERR_PNPM_OPTIONAL_DEPS_REQUIRE_PROD_DEPS`.
+- Avec ce correctif, l'installation, la génération Prisma, la compilation frontend avec contrôle TypeScript, le backend et l'orchestrateur ont tous terminé sans erreur.
+- Le premier démarrage a établi les connexions aux dépendances mais Nginx a échoué en ouvrant `/dev/stderr` sous PM2. Le statut Railway `SUCCESS` de cet ancien déploiement n'était donc PAS une preuve d'accès web.
+- `8009ebbf23f6d3ddec1f33c1de2045f1803a8e83` : Nginx utilise désormais `error_log stderr` sans rouvrir le descripteur de PM2 ; son access log local est désactivé pour éviter un journal non borné.
+- Configuration Railway vérifiée explicitement : `Dockerfile.caleonis`, commande `bash /app/var/caleonis/start.sh`, contrôle `/healthz` avec délai de 600 secondes, branche `main`.
+- L'API Railway a refusé de définir `railwayConfigFile` en indiquant que Config as Code est déprécié. Les paramètres nécessaires ont donc été appliqués directement au service. Ne pas se fier uniquement à `railway.toml` pour une nouvelle instance.
+- Le bouton/outillage de redéploiement a repris l'ancien commit. Une nouvelle modification de configuration, validée par l'agent, a déclenché la construction du bon commit. Vérifier systématiquement `commitHash`, pas seulement le nom de branche.
+- Watch paths : `**`, puis `!/*.md`, pour éviter les reconstructions lors de modifications des seuls documents Markdown à la racine.
 
-## Blocages Railway observés
+## État de validation à cet instant
 
-1. L'agent d'infrastructure a refusé la préparation des volumes et bases avec :
-   `Agent usage limit reached. Update your limit in usage settings.`
-2. La création directe du service depuis le dépôt a été refusée avec :
-   `Free plan resource provision limit exceeded. Please upgrade to provision more resources!`
+Dernier déploiement correct en cours : `4d75198c-5f07-474d-9f19-c7305121001c`, commit `8009ebbf23f6d3ddec1f33c1de2045f1803a8e83` vérifié dans les métadonnées Railway.
+Au dernier contrôle, il est encore en construction. Ne pas affirmer que l'accès web fonctionne tant que son démarrage et `/healthz` ne sont pas validés.
+L'ancien redéploiement `be5d9d52-45b3-4009-8a0f-4af4f3f7637c` utilise encore `05ae5b5...` ; il ne doit pas être pris pour la version corrigée.
 
-Le statut a ensuite été relu : le projet caleonis-marketing existe, mais la liste des services est vide. Aucun service, bucket ni déploiement applicatif n'a été créé par cette tentative. Aucun changement de formule ou de plafond budgétaire n'a été effectué.
+Adresse attribuée (pas encore attestée fonctionnelle dans ce relevé) : `https://caleonis-marketing-production.up.railway.app`.
 
-La construction complète n'a donc pas été lancée sur Railway. Aucune validation TypeScript globale, aucun test navigateur et aucun test de publication réelle ne sont revendiqués. Il n'existe pas encore d'URL applicative fonctionnelle pour Marketing.
+Les tests locaux initiaux comprenaient 8 tests réussis, dont des sondes HTTP simulées ; ils ne constituent pas un test de publication réelle. Le build Docker a aussi exécuté avec succès les tests de transformation de marque et les contrôles de syntaxe.
 
-## Prochaine étape
+## Premier compte et services externes
 
-Résoudre le quota de ressources de l'espace Railway concerné, puis créer les bases persistantes et le service applicatif. L'ajout de volumes depuis l'interface Railway reste une solution au blocage de l'agent : augmenter le budget Agent n'est pas un prérequis technique pour utiliser des volumes.
+Aucun compte n'a été créé par l'assistant. La route `/auth` autorise le premier compte local tant qu'aucune organisation n'existe, même avec `DISABLE_REGISTRATION=true`. Les inscriptions locales supplémentaires sont ensuite refusées. Ce n'est pas une restriction par adresse e-mail du propriétaire : effectuer la prise en main contrôlée puis vérifier la fermeture des inscriptions.
+`EMAIL_PROVIDER` n'est pas configuré ; le service sélectionne son fournisseur vide. Aucun envoi d'e-mail, mot de passe oublié ou invitation par e-mail n'est validé.
+Aucune clé IA, clé OAuth de réseau social ou configuration Stripe n'a été ajoutée. Aucune publication ni campagne externe n'a été effectuée.
+Les mots de passe techniques et le secret JWT sont uniquement dans les variables Railway, pas dans le dépôt.
 
-Ensuite seulement : construire, examiner les journaux, vérifier /healthz, ouvrir l'accès de manière contrôlée, connecter les services IA/OAuth et tester une publication explicitement autorisée. Ne pas modifier ou supprimer Caléonis Réception pour faire de la place.
+## Avant une bêta commerciale
+
+Vérifier l'accès HTTP et le navigateur, la création/connexion du compte, la séparation des organisations, un upload conservé après redéploiement, les sauvegardes/restaurations, le budget et la région. Connecter ensuite les fournisseurs IA et un canal social autorisé, puis tester explicitement brouillon, programmation et publication.
+Le contrôle `/healthz` vérifie le web, la réponse HTTP de l'API et le namespace Temporal via l'orchestrateur. Il ne certifie ni toutes les fonctions métier ni les publications sur les réseaux.
+Les campagnes marketing complètes, le profil d'entreprise enrichi et l'intégration Caléonis OS ne sont pas livrés par ce bootstrap.
