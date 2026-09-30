@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { validateDocument, validateStudioSettings, referenceLinks } from '../../../../libraries/helpers/src/caleonis/workspace.domain.ts';
+import { handleStudioOperation, isStudioMessage, STUDIO_CHANNEL, validateBrief } from '../../../../apps/frontend/src/caleonis/studio-channel.mjs';
+const id='11111111-1111-4111-8111-111111111111', media='22222222-2222-4222-8222-222222222222';
+const settings={schemaVersion:1,imageModelId:'flux-2-pro',videoModelId:'wan-2.2',videoVariantId:'',sizeAspect:'16:9',sizeResolution:'2k',imageFieldValues:{seed:42,enable_prompt_expansion:true},videoSettings:{duration:'5',aspectRatio:'16:9',cfgScale:0.5,negativePrompt:'',expandPrompt:false,fieldValues:{generate_audio:false}}};
+const serialized=JSON.stringify(settings);
+const project={id,kind:'project',title:'Persisted project',revision:3,data:{prompt:'Before',mode:'image',referenceIds:[],engine:'native',quality:'medium',campaignId:'',connectionId:''}};
+const payload={revision:3,prompt:'Product campaign',mode:'image',studioSettings:serialized,referenceIds:[media]};
+test('real server validation accepts and normalizes upstream choices',()=>assert.deepEqual(JSON.parse(validateStudioSettings(serialized)), settings));
+test('project validation preserves settings and explicit media references',()=>{
+ const doc=validateDocument({kind:'project',title:'Example',data:{...project.data,prompt:payload.prompt,studioSettings:serialized,referenceIds:[media]}});
+ assert.equal(JSON.parse(doc.data.studioSettings).sizeResolution,'2k'); assert.deepEqual(referenceLinks(doc),[{id:media,kind:'media'}]);
+});
+for(const value of ['null','[]','{}','{','x'.repeat(16001)])test(`reject malformed settings ${value.slice(0,12)}`,()=>assert.throws(()=>validateStudioSettings(value)));
+for(const key of ['apiKey','organizationId','endpoint','approved','token','webhook'])test(`reject root execution field ${key}`,()=>assert.throws(()=>validateStudioSettings(JSON.stringify({...settings,[key]:'not-allowed'}))));
+for(const key of ['apiKey','constructor','__proto__','endpoint','accessToken','webhookUrl'])test(`reject nested execution field ${key}`,()=>assert.throws(()=>validateStudioSettings(JSON.stringify({...settings,imageFieldValues:{[key]:'not-allowed'}}))));
+for(const value of [null,[],{a:{b:'x'}},{seed:1e30},{prompt:'x'.repeat(2001)},{image_url:'https://outside.invalid/ref'}])test(`reject invalid custom setting ${JSON.stringify(value).slice(0,40)}`,()=>assert.throws(()=>validateStudioSettings(JSON.stringify({...settings,imageFieldValues:value}))));
+test('canonical ordering is stable',()=>assert.equal(validateStudioSettings(JSON.stringify(settings)),validateStudioSettings(JSON.stringify({...settings,imageFieldValues:{enable_prompt_expansion:true,seed:42}}))));
+test('new channel saves via existing authenticated API without forwarding identity',async()=>{
+ const calls=[]; const result=await handleStudioOperation(id,'saveDraft',payload,async(path,options)=>{calls.push({path,options});if(!options)return project;const body=JSON.parse(options.body);validateDocument(body);return {...project,...body,revision:4};});
+ assert.equal(calls.length,2);assert.equal(calls[1].path,`/workspace/documents/${id}`);assert.equal(calls[1].options.method,'PUT');assert.equal(result.project.revision,4);assert.deepEqual(result.project.data.referenceIds,[media]);assert.equal(result.project.data.engine,'native');
+});
+test('old saveBrief remains compatible',async()=>{const result=await handleStudioOperation(id,'saveBrief',{revision:3,prompt:'Text only',mode:'video'},async(_path,options)=>options?{...project,...JSON.parse(options.body),revision:4}:project);assert.equal(result.project.data.mode,'video');});
+test('stale revision never writes',async()=>{let writes=0;await assert.rejects(()=>handleStudioOperation(id,'saveDraft',{...payload,revision:2},async(_path,options)=>{if(options)writes++;return project;}));assert.equal(writes,0);});
+for(const key of ['organizationId','projectId','apiKey'])test(`channel rejects injected ${key} before API`,async()=>{let calls=0;await assert.rejects(()=>handleStudioOperation(id,'saveDraft',{...payload,[key]:id},async()=>{calls++;return project;}));assert.equal(calls,0);});
+test('foreign project returned by API is not displayed',async()=>{await assert.rejects(()=>handleStudioOperation(id,'project',null,async()=>({...project,id:media})));});
+test('denied session does not fall back to fabricated data',async()=>{await assert.rejects(()=>handleStudioOperation(id,'project',null,async()=>{throw new Error('Access denied');}));});
+test('unsupported generation operation never reaches API',async()=>{let calls=0;await assert.rejects(()=>handleStudioOperation(id,'generate',{},async()=>{calls++;}));assert.equal(calls,0);});
+test('source and origin are required on channel',()=>{const frame={};const base={source:frame,origin:'https://marketing.example',data:{channel:STUDIO_CHANNEL,type:'request',id,operation:'saveDraft'}};assert.equal(isStudioMessage(base,frame,base.origin),true);assert.equal(isStudioMessage({...base,source:{}},frame,base.origin),false);assert.equal(isStudioMessage({...base,origin:'https://foreign.example'},frame,base.origin),false);});
+test('duplicate references are normalized but oversized lists rejected',()=>{assert.deepEqual(validateBrief({...payload,referenceIds:[media,media]},true).referenceIds,[media]);assert.throws(()=>validateBrief({...payload,referenceIds:Array(9).fill(media)},true));});

@@ -6,9 +6,25 @@ import { ResultsGrid } from '@/components/tasks/ResultsGrid';
 import { studioRequest, type StudioDraft } from '@/caleonis/client';
 
 type Project = {id:string; title:string; revision:number; data:Record<string, string | string[]>};
-type Bootstrap = {project:Project; campaign:{title:string}|null; generationReason:string};
+type Bootstrap = {project:Project; campaign:{title:string}|null; generationEnabled:boolean};
 type Media = {id:string; name:string; path:string; type?:string};
 
+function settings(draft:StudioDraft) {
+  const {prompt, mode, ...values} = draft;
+  return values;
+}
+function signature(draft:StudioDraft, references:string[]) {
+  const normalize = (value:unknown):unknown => Array.isArray(value) ? value.map(normalize) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>[k,normalize(v)])) : value;
+  return JSON.stringify(normalize({draft, references}));
+}
+function restore(project:Project):StudioDraft|undefined {
+  if (!project.data.studioSettings) return undefined;
+  try {
+    const data = JSON.parse(String(project.data.studioSettings));
+    if (data.schemaVersion !== 1) return undefined;
+    return {...data, prompt:String(project.data.prompt || ''), mode:project.data.mode === 'video' ? 'video' : 'image'};
+  } catch { return undefined; }
+}
 export function StudioShell() {
   const [context, setContext] = useState<Bootstrap|null>(null);
   const [error, setError] = useState('');
@@ -24,9 +40,11 @@ export function StudioShell() {
 
 function ProjectStudio({initial}: {initial:Bootstrap}) {
   const [project, setProject] = useState(initial.project);
-  const [initialDraft] = useState<StudioDraft|undefined>(undefined);
+  const [initialDraft] = useState<StudioDraft|undefined>(() => restore(initial.project));
   const [mode, setMode] = useState<'image'|'video'>(initialDraft?.mode || (initial.project.data.mode === 'video' ? 'video' : 'image'));
   const [draft, setDraft] = useState<StudioDraft|null>(null);
+  const initialReferences = useRef<string[]>(Array.isArray(initial.project.data.referenceIds) ? initial.project.data.referenceIds : []);
+  const [references, setReferences] = useState<string[]>(initialReferences.current);
   const [hasLocalFiles, setHasLocalFiles] = useState(false);
   const [savedSignature, setSavedSignature] = useState('');
   const [saving, setSaving] = useState(false);
@@ -38,9 +56,9 @@ function ProjectStudio({initial}: {initial:Bootstrap}) {
   const [mediaStatus, setMediaStatus] = useState('');
   const receiveDraft = useCallback((next:StudioDraft, localFiles:boolean) => {
     setDraft(next); setHasLocalFiles(localFiles);
-    setSavedSignature(previous => previous || JSON.stringify({mode:next.mode,prompt:next.prompt}));
+    setSavedSignature(previous => previous || signature(next, initialReferences.current));
   }, []);
-  const dirty = !!draft && JSON.stringify({mode:draft.mode,prompt:draft.prompt}) !== savedSignature;
+  const dirty = !!draft && signature(draft, references) !== savedSignature;
   useEffect(() => {
     if (!dirty && !hasLocalFiles) return;
     const guard = (event:BeforeUnloadEvent) => {event.preventDefault(); event.returnValue = '';};
@@ -50,10 +68,10 @@ function ProjectStudio({initial}: {initial:Bootstrap}) {
   async function save() {
     if (!draft || savingRef.current) return;
     savingRef.current = true; setSaving(true); setError(''); setNotice('');
-    const snapshot = draft;
+    const snapshot = draft; const selected = [...references];
     try {
-      const result = await studioRequest('saveBrief', {revision:project.revision, prompt:snapshot.prompt, mode:snapshot.mode});
-      setProject(result.project); setSavedSignature(JSON.stringify({mode:snapshot.mode,prompt:snapshot.prompt})); setNotice(`Version ${result.project.revision} enregistrée (brief et type).`);
+      const result = await studioRequest('saveDraft', {revision:project.revision, prompt:snapshot.prompt, mode:snapshot.mode, studioSettings:JSON.stringify(settings(snapshot)), referenceIds:selected});
+      setProject(result.project); setSavedSignature(signature(snapshot, selected)); setNotice(`Version ${result.project.revision} enregistrée : brief, réglages et références du projet.`);
     } catch (err) { setError(err instanceof Error ? err.message : 'Sauvegarde non confirmée.'); }
     finally { savingRef.current = false; setSaving(false); }
   }
@@ -62,21 +80,29 @@ function ProjectStudio({initial}: {initial:Bootstrap}) {
     try { setMedia(await studioRequest('media')); setMediaStatus(''); }
     catch (err) { setMediaStatus(err instanceof Error ? err.message : 'Médiathèque indisponible.'); }
   }
+  function toggleReference(id:string) {
+    setNotice('');
+    setReferences(previous => previous.includes(id) ? previous.filter(item => item !== id) : previous.length < 8 ? [...previous, id] : previous);
+  }
   return (
     <div className="relative h-screen overflow-hidden bg-background text-foreground">
       <header className="absolute left-0 right-0 top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-background/95 px-5 py-3">
         <div className="min-w-0"><p className="text-[10px] uppercase tracking-[.2em] text-primary">Caléonis · Studio créatif</p><h1 className="max-w-[50vw] truncate text-sm font-bold">{project.title}</h1><p className="text-[10px] text-muted-foreground">{initial.campaign ? `Campagne : ${initial.campaign.title} · ` : ''}Version {project.revision}{dirty ? ' · Modifications non enregistrées' : ''}</p></div>
-        <div className="flex items-center gap-2"><button type="button" className="rounded-xl border border-white/15 px-3 py-2 text-xs" onClick={() => void openLibrary()}>Médiathèque</button><button type="button" className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-black disabled:opacity-40" disabled={!dirty || saving} onClick={() => void save()}>{saving ? 'Enregistrement…' : 'Enregistrer le brief'}</button></div>
-        <p className="w-full text-[11px] text-muted-foreground">Catalogue image et vidéo conservé · Générations non raccordées, aucun appel payant possible. Les réglages avancés et les fichiers restent temporaires ; seul le brief et le type de projet sont sauvegardés dans ce lot.</p>
-        {hasLocalFiles && <p role="status" className="w-full text-xs text-amber-200">Les fichiers temporaires ne seront pas enregistrés avec le brief. Conservez vos originaux.</p>}
+        <div className="flex items-center gap-2"><button type="button" className="rounded-xl border border-white/15 px-3 py-2 text-xs" onClick={() => void openLibrary()}>Médiathèque</button><button type="button" className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-black disabled:opacity-40" disabled={!dirty || saving} onClick={() => void save()}>{saving ? 'Enregistrement…' : 'Enregistrer le projet'}</button></div>
+        <p className="w-full text-[11px] text-muted-foreground">{references.length} référence(s) liée(s) · Modèles image et vidéo conservés. Les générations restent désactivées jusqu’au raccordement des moteurs.</p>
+        {hasLocalFiles && <p role="status" className="w-full text-xs text-amber-200">Les fichiers déposés dans les contrôles du modèle restent temporaires. Pour conserver une référence, sélectionnez un média déjà enregistré dans Médiathèque.</p>}
         {(error || notice) && <p role={error ? 'alert' : 'status'} className={`w-full text-xs ${error ? 'text-red-300' : 'text-primary'}`}>{error || notice}</p>}
       </header>
       <div className="h-full pt-36"><ResultsGrid mode={mode} /></div>
       <CommandBar mode={mode} onModeChange={setMode} initialDraft={initialDraft} initialPrompt={String(project.data.prompt || '')} onDraftChange={receiveDraft} generationEnabled={false} />
       <dialog ref={dialog} className="m-auto max-h-[80vh] w-[min(860px,92vw)] overflow-auto rounded-2xl border border-white/15 bg-background p-5 text-foreground backdrop:bg-black/70">
-        <div className="mb-4 flex items-center justify-between gap-3"><h2 className="font-bold">Médiathèque de votre entreprise</h2><button type="button" onClick={() => dialog.current?.close()}>Fermer</button></div>
-        <p className="mb-4 text-xs text-muted-foreground">Même bibliothèque que dans Caléonis. Consultation des 40 médias les plus récents ; l’attachement persistant au studio reste à raccorder.</p>
-        {mediaStatus ? <p role="status">{mediaStatus}</p> : !media.length ? <p>Aucun média disponible.</p> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{media.map(item => <figure key={item.id} className="overflow-hidden rounded-xl border border-white/10">{item.type === 'video' ? <video src={item.path} controls className="h-36 w-full object-contain" preload="metadata"/> : <img src={item.path} alt={item.name} className="h-36 w-full object-contain" loading="lazy"/>}<figcaption className="truncate p-2 text-xs">{item.name}</figcaption></figure>)}</div>}
+        <div className="mb-4 flex items-center justify-between gap-3"><h2 className="font-bold">Médiathèque de votre entreprise</h2><button type="button" onClick={() => dialog.current?.close()}>Terminer</button></div>
+        <p className="mb-4 text-xs text-muted-foreground">Choisissez jusqu’à 8 références, puis enregistrez le projet. Les 40 médias les plus récents sont proposés. Leur envoi aux moteurs sera activé après raccordement.</p>
+        <p className="mb-3 text-xs">{references.length}/8 sélectionnée(s)</p>
+        {mediaStatus ? <p role="status">{mediaStatus}</p> : !media.length ? <p>Aucun média disponible.</p> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{media.map(item => <label key={item.id} className={`cursor-pointer overflow-hidden rounded-xl border ${references.includes(item.id) ? 'border-primary' : 'border-white/10'}`}>
+          {item.type === 'video' ? <video src={item.path} className="h-36 w-full object-contain" preload="metadata"/> : <img src={item.path} alt="" className="h-36 w-full object-contain" loading="lazy"/>}
+          <span className="flex items-center gap-2 p-3 text-xs"><input type="checkbox" checked={references.includes(item.id)} disabled={!references.includes(item.id) && references.length >= 8} onChange={() => toggleReference(item.id)}/><span className="truncate">{item.name}</span></span>
+        </label>)}</div>}
       </dialog>
     </div>
   );

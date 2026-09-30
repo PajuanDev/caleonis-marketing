@@ -2,7 +2,7 @@ name: Caleonis embedded upstream studio
 on:
   push:
     branches: [feat/marketing-workspace-v1]
-    paths: ['var/caleonis/upstream-studio/embedded/**', 'apps/frontend/src/caleonis/studio-channel.mjs', 'apps/frontend/src/caleonis/embedded-studio.component.tsx', 'apps/frontend/src/app/**/media/studio/**', '.github/workflows/caleonis-embedded-studio.yml']
+    paths: ['var/caleonis/upstream-studio/embedded/**', 'apps/frontend/src/caleonis/studio-channel.mjs', 'apps/frontend/src/caleonis/embedded-studio.component.tsx', 'apps/frontend/src/app/**/media/studio/**', 'libraries/helpers/src/caleonis/workspace.domain.ts', '.github/workflows/caleonis-embedded-studio.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,15 +20,15 @@ jobs:
         with: {persist-credentials: false}
       - uses: actions/setup-node@v4
         with: {node-version: '22.20.0'}
-      - name: Test the keyless UI channel without provider calls
-        run: node --test var/caleonis/upstream-studio/embedded/channel.test.mjs
-      - name: Retrieve the original pinned studio and its own dependencies
+      - name: Test channel and actual server validation without provider calls
+        run: node --experimental-strip-types --test var/caleonis/upstream-studio/embedded/channel.test.mjs var/caleonis/upstream-studio/embedded/persistence.test.mjs
+      - name: Retrieve the original pinned studio and its locked dependencies
         run: |
           git submodule update --init --depth 1 -- vendor/open-higgsfield
           test "$(git -C vendor/open-higgsfield rev-parse HEAD)" = 1df1148e46d1b47d29e117b7bb1971a65c4286ee
           cd vendor/open-higgsfield
           npm ci --ignore-scripts --no-audit --no-fund
-      - name: Compile original controls and galleries into the Caléonis frontend
+      - name: Compile original controls and galleries for the Caléonis host
         run: |
           npm install --prefix var/caleonis/upstream-studio/embedded --ignore-scripts --no-audit --no-fund
           CALEONIS_STUDIO_BUILD_FIXTURE=isolated node var/caleonis/upstream-studio/embedded/build.mjs vendor/open-higgsfield /tmp/caleonis-embedded-assets
@@ -39,9 +39,9 @@ jobs:
           mkdir -p /tmp/caleonis-embedded-browser /tmp/caleonis-embedded-evidence
           cd /tmp/caleonis-embedded-browser
           npm init -y
-          npm install --no-audit --no-fund agent-browser@0.38.1
-          ./node_modules/.bin/agent-browser install --with-deps
-      - name: Inspect original UI, save and reopen a fixture project, verify closed generation
+          npm install --no-audit --no-fund agent-browser@0.38.1 @playwright/test@1.56.1
+          ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Verify real controls, project persistence and fail-closed access
         env:
           CALEONIS_STUDIO_FIXTURE: isolated
         run: |
@@ -50,62 +50,18 @@ jobs:
           readonly OUT=/tmp/caleonis-embedded-evidence
           node var/caleonis/upstream-studio/embedded/fixture.mjs /tmp/caleonis-embedded-assets > "$OUT/server.log" 2>&1 &
           SERVER_PID=$!
-          finish() {
-            rc=$?
-            if [ "$rc" -ne 0 ]; then
-              $AB screenshot "$OUT/failure.png" || true
-              $AB snapshot -i > "$OUT/failure-snapshot.txt" || true
-              $AB errors > "$OUT/failure-errors.txt" || true
-              $AB eval 'JSON.stringify({body:document.body.innerText,frame:document.querySelector("iframe")?.contentDocument?.body.innerText})' > "$OUT/failure-dom.json" || true
-            fi
-            $AB close || true
-            kill "$SERVER_PID" 2>/dev/null || true
-            exit "$rc"
-          }
-          trap finish EXIT
+          trap '$AB close || true; kill "$SERVER_PID" 2>/dev/null || true' EXIT
           for i in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:4318/caleonis-studio/index.html -o /dev/null; then break; fi
             sleep 1
           done
-          $AB open http://127.0.0.1:4318/fixture-host.html
+          CHROMIUM=$(cd /tmp/caleonis-embedded-browser && node -p 'require("@playwright/test").chromium.executablePath()')
+          $AB --executable-path "$CHROMIUM" open http://127.0.0.1:4318/fixture-host.html
           $AB wait --fn '!!document.querySelector("iframe")?.contentDocument?.querySelector("textarea")'
           $AB snapshot -i > "$OUT/host-snapshot.txt"
-          $AB frame 'http://127.0.0.1:4318/caleonis-studio/index.html'
-          $AB wait 'textarea'
-          $AB snapshot -i > "$OUT/image-snapshot.txt"
-          $AB eval 'if (!document.querySelector("textarea")?.placeholder.includes("image")) throw new Error("Image composer missing"); const buttons=[...document.querySelectorAll("button")].filter(b=>/Générer/.test(b.textContent)); if (!buttons.length || buttons.some(b=>!b.disabled)) throw new Error("Generation unexpectedly active or absent"); "image and disabled generation verified"'
-          $AB fill 'textarea' 'Campagne test : le produit doit rester fidèle à sa référence.'
-          $AB find role button click --name 'Enregistrer le brief' --exact
-          $AB wait --fn 'document.body.innerText.includes("Version 2 enregistrée")'
-          $AB screenshot "$OUT/image-studio.png"
-          $AB frame main
-          $AB reload
-          $AB wait --fn '!!document.querySelector("iframe")?.contentDocument?.querySelector("textarea")'
-          $AB frame 'http://127.0.0.1:4318/caleonis-studio/index.html'
-          $AB wait 'textarea'
-          $AB eval 'if (!document.querySelector("textarea").value.includes("produit doit rester fidèle")) throw new Error("Saved brief not restored"); "saved brief restored"'
-          $AB snapshot -i > "$OUT/restored-snapshot.txt"
-          $AB find role button click --name 'Vidéo' --exact
-          $AB wait --fn 'document.querySelector("textarea")?.placeholder.includes("vidéo")'
-          $AB snapshot -i > "$OUT/video-snapshot.txt"
-          $AB screenshot "$OUT/video-studio.png"
-          $AB find role button click --name 'Médiathèque' --exact
-          $AB wait --fn 'document.body.innerText.includes("Référence produit — donnée de test")'
-          $AB screenshot "$OUT/shared-media.png"
-          $AB errors > "$OUT/browser-errors.txt"
-          $AB eval 'JSON.stringify({title:document.title,originalControls:true,realHostComponent:true,fixtureBackend:true,imageMode:true,videoMode:true,savedBriefRestored:true,sharedMediaOpened:true,generationRequests:performance.getEntriesByType("resource").filter(e=>/generate/.test(e.name)).length})' > "$OUT/report-raw.json"
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          root=Path('/tmp/caleonis-embedded-evidence')
-          report=json.loads(root.joinpath('report-raw.json').read_text())
-          if isinstance(report,str): report=json.loads(report)
-          assert report['generationRequests']==0
-          assert not root.joinpath('browser-errors.txt').read_text().strip()
-          report.update(productionModified=False,realProviderTest=False,userAcceptanceTest=False)
-          root.joinpath('report.json').write_text(json.dumps(report,indent=2,ensure_ascii=False))
-          print(json.dumps(report))
-          PY
+          $AB screenshot "$OUT/host-loaded.png"
+          $AB close
+          node var/caleonis/upstream-studio/embedded/browser.test.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -114,3 +70,34 @@ jobs:
             /tmp/caleonis-embedded-evidence
             /tmp/caleonis-embedded-assets/build-info.json
           retention-days: 3
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: {POSTGRES_PASSWORD: ci-local-only, POSTGRES_DB: caleonis_workspace_test}
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:ci-local-only@127.0.0.1:5432/caleonis_workspace_test
+      CALEONIS_TEST_DB: isolated
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22.20.0'}
+      - name: Install isolated database dependencies
+        run: |
+          mkdir -p /tmp/caleonis-studio-db
+          cd /tmp/caleonis-studio-db
+          npm init -y
+          npm install --no-audit --no-fund prisma@6.5.0 @prisma/client@6.5.0
+          ln -s /tmp/caleonis-studio-db/node_modules "$GITHUB_WORKSPACE/node_modules"
+      - name: Initialize disposable schema and test persisted studio choices
+        run: |
+          node_modules/.bin/prisma generate --schema libraries/nestjs-libraries/src/database/prisma/schema.prisma
+          node_modules/.bin/prisma db push --skip-generate --schema libraries/nestjs-libraries/src/database/prisma/schema.prisma
+          node --experimental-strip-types --test var/caleonis/upstream-studio/embedded/persistence-db.test.mjs
