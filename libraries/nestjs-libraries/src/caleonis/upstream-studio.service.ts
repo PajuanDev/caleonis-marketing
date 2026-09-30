@@ -98,8 +98,7 @@ export class UpstreamStudioService {
     if(!claim)throw new HttpException('Import déjà commencé ou à vérifier. Aucun import supplémentaire.',409);
     try {
       const file=await storeProviderAsset(claim.providerState!.assets[0].url,claim.snapshot.mode);
-      const saved=await this.media.saveFile(org,file.filename,file.path);
-      await repository.imported(org,id,saved.id);
+      await repository.finishProviderImport(org,id,file,claim.snapshot.mode);
     } catch {
       await repository.providerImportUncertain(org,id);
       throw new HttpException('Import non confirmé. La demande reste bloquée pour éviter un doublon ; vérifiez la médiathèque.',503);

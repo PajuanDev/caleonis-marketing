@@ -93,3 +93,20 @@ test('unknown billable request cannot be resubmitted under a fresh client id',as
  await assert.rejects(()=>jobs.reserve(a,randomUUID(),providerProject.id,1,providerAccount,{},100),StudioReservationError);
  assert.equal((await jobs.reserve(a,id,providerProject.id,1,providerAccount,{},0)).created,false);
 });
+
+test('provider output is atomically attached to shared media with its real video type',async()=>{
+ const project=await docs.create(a,{kind:'project',title:'Video import test',data:{mode:'video'}}),id=randomUUID();
+ await jobs.reserve(a,id,project.id,1,providerAccount,{mode:'video'},100);
+ await jobs.providerAccepted(a,id,randomUUID(),{pollUrl:'/fixture'});
+ await jobs.providerResult(a,id,'completed',{assets:[{url:'https://example.test/out.mp4'}]});
+ await jobs.claimProviderImport(a,id);
+ const file={filename:'fixture.mp4',path:'https://example.test/uploads/fixture.mp4'};
+ await assert.rejects(()=>jobs.finishProviderImport(b,id,file,'video'),StudioReservationError);
+ const mediaId=await jobs.finishProviderImport(a,id,file,'video');
+ const record=await db.media.findUnique({where:{id:mediaId}}),run=await jobs.get(a,id);
+ assert.equal(record.organizationId,a);assert.equal(record.type,'video');assert.equal(record.status,'ready');
+ assert.equal(run.mediaId,mediaId);assert.equal(run.providerState.importState,'imported');
+ assert.equal(await jobs.finishProviderImport(a,id,file,'video'),mediaId);
+ assert.equal(await jobs.claimProviderImport(a,id),undefined);
+ await db.media.delete({where:{id:mediaId}});
+});

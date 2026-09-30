@@ -54,6 +54,19 @@ export function createStudioRepository(db: PrismaClient) {
       const rows = await db.$queryRaw<StudioRun[]>`UPDATE caleonis.studio_runs SET "providerState"="providerState" || '{"importState":"importing"}'::jsonb,"updatedAt"=NOW() WHERE "organizationId"=${org} AND id=${id} AND status='completed' AND "mediaId" IS NULL AND "connectionId" LIKE 'native:magnific:%' AND NOT ("providerState" ? 'importState') RETURNING *`;
       return rows[0];
     },
+    async finishProviderImport(org: string, id: string, file: {filename: string; path: string}, kind: 'image' | 'video') {
+      if (!['image','video'].includes(kind)) throw new StudioReservationError('Type de média invalide.');
+      return db.$transaction(async tx => {
+        const rows = await tx.$queryRaw<StudioRun[]>`SELECT * FROM caleonis.studio_runs WHERE "organizationId"=${org} AND id=${id} AND "connectionId" LIKE 'native:magnific:%' FOR UPDATE`;
+        const run = rows[0];
+        if (!run) throw new StudioReservationError('Import non réservé.');
+        if (run.mediaId) return run.mediaId;
+        if (run.status !== 'completed' || run.providerState?.importState !== 'importing') throw new StudioReservationError('Import non réservé.');
+        const media = await tx.media.create({data:{organizationId:org,name:file.filename,path:file.path,type:kind,status:'ready'},select:{id:true}});
+        await tx.$executeRaw`UPDATE caleonis.studio_runs SET "mediaId"=${media.id},"providerState"="providerState" || '{"importState":"imported"}'::jsonb,"updatedAt"=NOW() WHERE "organizationId"=${org} AND id=${id}`;
+        return media.id;
+      });
+    },
     async providerImportUncertain(org: string, id: string) {
       await db.$executeRaw`UPDATE caleonis.studio_runs SET "providerState"="providerState" || '{"importState":"unknown"}'::jsonb,"updatedAt"=NOW() WHERE "organizationId"=${org} AND id=${id} AND "mediaId" IS NULL AND "providerState"->>'importState'='importing'`;
     },

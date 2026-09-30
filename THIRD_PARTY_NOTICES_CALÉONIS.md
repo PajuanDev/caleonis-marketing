@@ -29,3 +29,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+## Reprise du studio complet et de ses adaptateurs serveur
+
+Depuis la version figée `1df1148e46d1b47d29e117b7bb1971a65c4286ee`, le sous-module `vendor/open-higgsfield` conserve l'application complète et sa licence. Le build client reprend la barre de création, les contrôles et la galerie. Le runtime serveur ajouté dans `var/caleonis/upstream-studio/provider` reprend `FreepikProvider`, `FluxAdapter` et `LtxAdapter`, avec les empreintes des fichiers d'origine conservées dans `upstream-hashes.json`. Les dépendances des adaptateurs présentes dans le bundle restent soumises à leurs notices.
+
+Le transport est adapté par Caléonis à l'origine API documentée `api.magnific.com`, aux contextes de clés isolés, aux tailles bornées et à l'absence de nouvelle tentative d'achat automatique. La gestion globale des tâches du serveur amont n'est pas reprise : les réservations et références d'organisation relèvent de Caléonis. La licence MIT ci-dessus est copiée avec les bundles client et serveur. La sélection actuelle est limitée à deux modèles relus et testés avec un réseau simulé ; elle ne constitue pas un test de qualité des rendus ni une validation de tous les modèles du catalogue.
