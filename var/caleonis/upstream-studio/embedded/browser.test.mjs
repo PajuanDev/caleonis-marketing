@@ -26,7 +26,7 @@ try {
  await expect(frame.getByRole('button',{name:/Générer/})).toBeDisabled();
  await text.fill('Campagne test : préserver le produit et son identité.');
  await frame.getByRole('button',{name:'1k',exact:true}).click();
- await frame.getByRole('button',{name:'2k',exact:true}).click();
+ await frame.getByRole('button',{name:'1.5k',exact:true}).click();
  await frame.getByRole('button',{name:'Médiathèque',exact:true}).click();
  const reference=frame.getByRole('checkbox',{name:'Référence produit — donnée de test',exact:true});
  await reference.check();await expect(reference).toBeChecked();
@@ -34,11 +34,11 @@ try {
  await frame.getByRole('button',{name:'Terminer',exact:true}).click();
  await expect(save).toBeEnabled();await save.click();
  await expect(frame.getByRole('status')).toContainText('Version 2 enregistrée');
- assert.equal(writes.length,1);assert.equal(JSON.parse(writes[0].data.studioSettings).sizeResolution,'2k');
+ assert.equal(writes.length,1);assert.equal(JSON.parse(writes[0].data.studioSettings).sizeResolution,'1.5k');
  assert.deepEqual(writes[0].data.referenceIds,['22222222-2222-4222-8222-222222222222']);
  await page.screenshot({path:`${output}/image-studio.png`,fullPage:true});
  await page.reload();await expect(text).toHaveValue('Campagne test : préserver le produit et son identité.');
- await expect(frame.getByRole('button',{name:'2k',exact:true})).toBeVisible();
+ await expect(frame.getByRole('button',{name:'1.5k',exact:true})).toBeVisible();
  await frame.getByRole('button',{name:'Médiathèque',exact:true}).click();await expect(reference).toBeChecked();
  await frame.getByRole('button',{name:'Terminer',exact:true}).click();await expect(save).toBeDisabled();
  await frame.getByRole('button',{name:'Vidéo',exact:true}).click();await expect(text).toHaveAttribute('placeholder',/vidéo/);
