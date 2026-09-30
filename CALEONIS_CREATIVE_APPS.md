@@ -14,11 +14,11 @@ Caléonis Marketing est une application autonome, sans abonnement à Caléonis O
 
 ## Connexion et facturation
 
-Les identifiants se saisissent dans la fenêtre « Connecter Higgsfield » de l'application, jamais dans une conversation, un dépôt ou une variable publique NEXT_PUBLIC. Le serveur vérifie le catalogue via un GET authentifié ; aucune génération n'est commandée à la connexion. Les clés sont conservées avec le mécanisme chiffré existant des connexions ThirdParty de Postiz, et ne sont pas renvoyées au navigateur dans la liste des connexions.
+Les identifiants se saisissent dans la fenêtre « Connecter Higgsfield » de l'application, jamais dans une conversation, un dépôt ou une variable publique NEXT_PUBLIC. Le serveur demande le catalogue via un GET authentifié ; aucune génération n'est commandée à la connexion. Les clés sont conservées avec le mécanisme chiffré existant des connexions ThirdParty de Postiz, et ne sont pas renvoyées au navigateur dans la liste des connexions. Ce mécanisme existant n'est pas un nouveau coffre-fort de secrets audité : sa modernisation et sa rotation restent à prévoir avant généralisation.
 
 Les générations utilisent le solde API de l'entreprise chez Higgsfield. L'abonnement web Higgsfield et les crédits API ne doivent pas être confondus. Aucun prix fixe ni génération incluse dans l'abonnement Caléonis n'est promis. Avant un essai réel, consulter les tarifs et autoriser explicitement une génération.
 
-Documentation fournisseur vérifiée pour le développement :
+Documentation fournisseur utilisée pour le développement :
 - https://open.higgsfield.ai/models/marketing-studio/image/api-reference
 - https://github.com/higgsfield-ai/higgsfield-js
 
@@ -30,24 +30,31 @@ L'organisation est issue de la session authentifiée, pas du corps de la demande
 
 La réservation Redis NX précède l'appel de génération. Rejouer le même UUID et le même brief pendant la durée de conservation ne déclenche pas un second POST payant. Un timeout ambigu est signalé comme « état à vérifier » et n'est jamais suivi automatiquement d'un nouveau POST. Une nouvelle demande avec un nouvel UUID peut être facturée séparément : vérifier le tableau de bord Higgsfield en cas d'incertitude.
 
-Les URLs de suivi doivent rester sur l'origine API officielle et correspondre au request_id. Les redirections sont refusées lorsque les credentials sont envoyés ; les appels ont un délai borné. Les messages d'erreur upstream bruts ne sont pas exposés. Les images importées passent par les protections SSRF et la détection de type de fichier du stockage existant, puis sont rattachées à l'organisation dans la médiathèque.
+Les URLs de suivi doivent rester sur l'origine API officielle et correspondre au request_id. Les redirections sont refusées lorsque les identifiants sont envoyés ; les appels ont un délai borné. Les messages d'erreur fournisseur bruts ne sont pas exposés. Les images importées passent par les protections SSRF et la détection de type de fichier du stockage existant, puis sont rattachées à l'organisation dans la médiathèque.
 
 L'import réutilise une génération terminée ; il ne relance pas le modèle. L'enregistrement média n'est pas une transaction distribuée exactement-une-fois : deux imports simultanés ou une interruption entre le stockage et le suivi peuvent produire deux entrées médias, sans achat d'une deuxième génération.
 
 La suppression d'une connexion ne supprime pas les médias déjà importés et n'annule pas les tâches déjà acceptées par le fournisseur.
 
-## Validation
+## Vérifications réellement réussies
 
-`node --experimental-strip-types --test var/caleonis/higgsfield.test.mjs` exécute le vrai moteur TypeScript avec fetch et stockage simulés, sans appel fournisseur ni dépense. Les 20 tests couvrent validation, consentement, non-transmission des paramètres inconnus, séparation des organisations, limitation de répétition du POST, erreurs ambiguës, protection des URLs et import d'un résultat simulé.
+Le run GitHub Actions `36734224894`, job `109951552569`, sur le commit `fcabe308d0d7319bce50df5237fd7f980488c21d`, s'est terminé avec succès :
 
-Le premier run GitHub Actions `36733078182` (commit `0ed8bb4`) a réussi ces 20 tests et les 9 tests de marque/cookies, puis échoué sur une limite mémoire de compilation frontend. La compilation doit être revalidée après correction ; les unit tests ne remplacent ni un test HTTP multi-utilisateur ni une génération réelle.
+- 20 tests du moteur Higgsfield, exécutant son vrai TypeScript avec fetch et stockage simulés, sans appel fournisseur ni dépense ;
+- 6 tests de portée des cookies et 3 tests de transformation de marque ;
+- vérification TypeScript du frontend ;
+- compilation du frontend, du backend et de l'orchestrateur.
 
-L'affichage de la page de connexion du pilote existant a été contrôlé par le run navigateur `36732984061` : titre Caléonis, champs e-mail et mot de passe présents, aucune erreur JavaScript relevée. Aucune authentification avec les identifiants du propriétaire n'a été réalisée. La capture a été conservée dans les artifacts temporaires du run.
+Un premier run avait dépassé la limite mémoire de compilation frontend. La configuration évite désormais les source maps Sentry inutilisées quand aucun destinataire n'est configuré et active les optimisations mémoire webpack. Les vérifications TypeScript, la sanitisation HTML et les contrôles de disponibilité n'ont pas été supprimés.
 
-La présence de ce document dans une branche ne prouve pas sa mise en production. Consulter CALEONIS_STATUS.md et le commit effectif du déploiement Railway.
+L'affichage de la page de connexion du pilote a été contrôlé par le run navigateur `36732984061` : titre Caléonis, champs e-mail et mot de passe présents après chargement, aucune erreur JavaScript relevée. Aucune authentification avec les identifiants du propriétaire n'a été réalisée. Une capture a été conservée dans les artifacts temporaires du run.
+
+Le commit testé a été intégré à main puis envoyé au déploiement Railway `7523a987-e491-4890-b1c2-f6ab2a4f0c74`. Consulter CALEONIS_STATUS.md pour son état effectivement vérifié. Une compilation réussie ne prouve pas à elle seule le démarrage ni le bon fonctionnement d'une API externe.
 
 ## Reste à valider avant généralisation
 
-Authentification réelle du propriétaire ; parcours authentifié Apps ; connexion d'un compte Higgsfield autorisé ; une génération image payante consentie ; import, persistance et suppression/reconnexion ; tests HTTP entre organisations ; quotas d'usage, supervision, sauvegardes et restauration. Le studio natif nécessite séparément les clés et éventuelles licences de ses propres fournisseurs.
+Authentification réelle du propriétaire ; parcours authentifié Apps ; connexion d'un compte Higgsfield autorisé ; une génération image payante consentie ; import, persistance et suppression/reconnexion ; tests HTTP entre organisations ; quotas d'usage, supervision, reprise après panne Redis, sauvegardes et restauration. Le studio natif nécessite séparément les clés et éventuelles licences de ses propres fournisseurs.
+
+Aucune clé Higgsfield ou OpenAI n'a été ajoutée lors de ce développement, aucune génération réelle n'a été commandée, et aucune publication sociale n'a été envoyée. Le profil entreprise, les campagnes enrichies et l'orchestration marketing globale ne sont pas livrés par cet incrément.
 
 Ne pas toucher à Caléonis Réception, ne pas activer de budgets ou d'abonnements et ne pas publier sur un réseau social pour un simple test du connecteur.
