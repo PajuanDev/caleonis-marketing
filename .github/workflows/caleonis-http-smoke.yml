@@ -1,0 +1,31 @@
+name: Caleonis HTTP smoke
+on:
+  push:
+    branches: [feat/creative-apps-v1]
+    paths: ['.github/workflows/caleonis-http-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-http:
+    if: github.repository == 'PajuanDev/caleonis-marketing'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check only public pilot endpoints without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          readonly BASE=https://caleonis-marketing-production.up.railway.app
+          curl --fail --silent --show-error --connect-timeout 10 --max-time 20 --retry 2 --retry-delay 3 "$BASE/healthz" -o /tmp/health.json
+          curl --fail --silent --show-error --connect-timeout 10 --max-time 20 --retry 2 --retry-delay 3 "$BASE/auth/login" -o /tmp/login.html
+          python3 - <<'PY'
+          import json, re
+          from pathlib import Path
+          health = json.loads(Path('/tmp/health.json').read_text())
+          assert health.get('status') == 'ready', 'Readiness did not report ready'
+          html = Path('/tmp/login.html').read_text()
+          title = re.search(r'<title>(.*?)</title>', html, re.S)
+          assert title and 'Caléonis Marketing' in title.group(1), 'Unexpected login title'
+          print(json.dumps({'health_http': 200, 'health': health['status'], 'login_http': 200, 'login_title': title.group(1), 'credentials_used': False}, ensure_ascii=False))
+          PY
