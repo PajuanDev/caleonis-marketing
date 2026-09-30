@@ -2,6 +2,7 @@
 
 État du 30 septembre 2026. Branche : `feat/marketing-workspace-v1`.
 Dernier code de ce lot : `fc5b6559243fa88908260ab2ef089dde6c3de1ba`.
+Les commits documentaires suivants ne changent pas ce code testé.
 
 ## Livraison
 
@@ -36,7 +37,7 @@ Références primaires vérifiées :
 
 Les identifiants ne sont pas changés dans process.env pour chaque utilisateur : un contexte asynchrone isolé fournit la clé à chaque appel serveur. Le transport accepte seulement les routes relues et les identifiants de tâches valides, borne les requêtes et réponses, ne suit pas les redirections et ne réessaie pas un POST payant. Les erreurs exposées ne contiennent ni corps brut fournisseur ni clé. Les options de désactivation de protection ne sont pas transmises.
 
-**Le premier compte Magnific est configuré côté serveur, pas via une nouvelle carte BYOK par entreprise.** Cette connexion par client reste à développer. Higgsfield officiel conserve son connecteur externe facultatif existant ; ce lot n'étend pas son choix dans les sélecteurs du nouveau studio. Le prototype OpenAI et ses fichiers Temporal restent non enregistrés comme moteur du parcours présent.
+**Ce premier raccordement prévoit un compte Magnific configuré côté serveur, pas une nouvelle carte BYOK par entreprise.** Aucune clé n'a été ajoutée ou activée. La connexion par client reste à développer. Higgsfield officiel conserve son connecteur externe facultatif existant ; ce lot n'étend pas son choix dans les sélecteurs du nouveau studio. Le prototype OpenAI et ses fichiers Temporal restent non enregistrés comme moteur du parcours présent.
 
 ## Parcours raccordé dans le code
 
@@ -113,9 +114,9 @@ Rapport obtenu :
 }
 ```
 
-### Compilation globale
+### Compilation globale — terminée avec succès
 
-Le workflow Build **36773924044**, job **110086954421**, sur le commit final de code a réussi les tests Higgsfield / cookies / marque, TypeScript et les compilations backend / orchestrateur. Au dernier contrôle avant ce compte rendu, le frontend était encore en cours. Vérifier sa conclusion finale avant fusion ; les compilations intermédiaires ne remplacent pas ce résultat.
+Le workflow Build **36773924044**, job **110086954421**, sur `fc5b6559243fa88908260ab2ef089dde6c3de1ba` est terminé : statut **completed**, conclusion **success**. Les 20 tests Higgsfield et les 9 tests cookies / marque, le contrôle TypeScript et les compilations **frontend, backend et orchestrateur** ont tous réussi. La fin des étapes de nettoyage a aussi été vérifiée. Cette compilation complète reste distincte d'un lancement Docker de production ou d'un déploiement Railway, non effectués dans ce lot.
 
 ## Limites et suite
 
