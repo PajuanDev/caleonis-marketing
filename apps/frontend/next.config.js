@@ -3,6 +3,9 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // jsdom loads its stylesheet from disk. Keep the server sanitizer and its
+  // Node dependencies outside webpack; client-side sanitization is unchanged.
+  serverExternalPackages: ['isomorphic-dompurify', 'jsdom'],
   experimental: {
     proxyTimeout: 90_000,
   },
